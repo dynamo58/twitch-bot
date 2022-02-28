@@ -3,36 +3,59 @@ mod db;
 
 use twitch_bot::{Config, CommandSource};
 use commands::handle_command;
-
 use sqlx::sqlite::SqlitePool;
-
 use dotenv::dotenv;
-use std::env;
+
+use tracing::{info, error, warn};
+use tracing_subscriber;
 
 use twitch_irc::login::StaticLoginCredentials;
-use twitch_irc::TwitchIRCClient;
-use twitch_irc::{ClientConfig, SecureTCPTransport};
+use twitch_irc::{ClientConfig, SecureTCPTransport, TwitchIRCClient};
 use twitch_irc::message::ServerMessage;
+
+use tokio_cron_scheduler::{JobScheduler, JobToRun, Job};
 
 const DB_PATH: &str = "sqlite:db.db";
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+	// load environment variables from `.env` file
 	dotenv().ok();
+	// instantiate traces
+	tracing_subscriber::fmt::init();
 
+	// instantiate running config from `config.json`
 	let config = match Config::from_config_file() {
 		Ok(conf) => conf,
 		Err(_) => panic!("Couldn't load config, aborting."),
 	};
+	// instantiate database connection pool
     let pool = SqlitePool::connect(DB_PATH).await?;
 
+	// create database tables for channels in config
+	// (if they do not already exist)
 	for channel in &config.channels {
 		db::try_create_table(&pool, channel).await?;
 	}
 
-	let twitch_nick = env::var("TWITCH_NICK").expect("Twitch nick is missing in .env").clone();
-	let twitch_oauth = env::var("TWITCH_OAUTH").expect("Twitch OAuth is missing in .env").clone();
+	// define scheduled tasks
+	// format of those is as follows:
+		// sec   min   hour   day of month   month   day of week   year
+		// *     *     *      *              *       *             *
+	let mut crons = JobScheduler::new();
+	crons.add(
+		Job::new_async("* 1/60 * * * *", |uuid, l| Box::pin( async {
+        	match db::index_tables_for_markov().await {
+				Ok(_) => info!("Channel tables have been successfully indexed for `markov` commands."),
+				Err(e) => error!("Channel tables could not be indexed for `markov` commands due to the following error: {}", e),
+			}
+		}
+	)).unwrap());
 
+	let twitch_nick = std::env::var("TWITCH_NICK").expect("Twitch nick is missing in .env").clone();
+	let twitch_oauth = std::env::var("TWITCH_OAUTH").expect("Twitch OAuth is missing in .env").clone();
+
+	// instantiate Twitch client
 	let client_config: ClientConfig<StaticLoginCredentials> = ClientConfig::new_simple(
 		StaticLoginCredentials::new(
 			twitch_nick,
@@ -42,15 +65,24 @@ async fn main() -> anyhow::Result<()> {
     let (mut incoming_messages, client) =
         TwitchIRCClient::<SecureTCPTransport, StaticLoginCredentials>::new(client_config);
 
+	// join all channels in config
 	for channel in &config.channels {
 		client.join(channel.into());
 	}
 
     let join_handle = tokio::spawn(async move {
+		// capture incoming messages
         while let Some(message) = incoming_messages.recv().await {
+			// privmsg == chat message
 			if let ServerMessage::Privmsg(privmsg) = message {
+				// log chat messages into database
+
+				// TODO: 
+				// check whether these include messages of the bot itself,
+				// if so, get rid of those
 				db::log(&pool, &privmsg).await.unwrap();
 
+				// if message is a command, handle it
 				if privmsg.message_text.chars().nth(0).unwrap() == config.prefix {
 					let cmd_src = CommandSource::from_privmsg(privmsg);
 					handle_command(client.clone(), cmd_src).await.unwrap();
