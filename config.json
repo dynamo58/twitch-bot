@@ -1,0 +1,14 @@
+{
+	"channels": [
+		"gisthekey",
+		"lovcen",
+		"pepega00000"
+	],
+	"disregarded_users": [
+		"Fossabot",
+		"Nightbot",
+		"Snusbot",
+		"StreamElements"
+	],
+	"prefix": "$"
+}
