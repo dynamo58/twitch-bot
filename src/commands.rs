@@ -1,12 +1,18 @@
-type TwitchClient = twitch_irc::TwitchIRCClient<twitch_irc::transport::tcp::TCPTransport<twitch_irc::transport::tcp::TLS>, twitch_irc::login::StaticLoginCredentials>;
 use crate::CommandSource;
+use crate::db;
 
-async fn handle_command
-(client: TwitchClient, cmd: CommandSource)
--> anyhow::Result<()> {
+use sqlx::sqlite::SqlitePool;
+
+type TwitchClient = twitch_irc::TwitchIRCClient<twitch_irc::transport::tcp::TCPTransport<twitch_irc::transport::tcp::TLS>, twitch_irc::login::StaticLoginCredentials>;
+
+pub async fn handle_command(
+	pool: &SqlitePool,
+	client: TwitchClient,
+	cmd: CommandSource
+) -> anyhow::Result<()> {
 	let cmd_out = match cmd.cmd.as_str() {
-		"ping" => ping(),
-		"markov" => markov(client, cmd)
+		"ping" => ping()?,
+		"markov" => markov(&pool, &cmd).await?,
 		_ => None,
 	};
 
@@ -17,12 +23,24 @@ async fn handle_command
 	Ok(())
 }
 
-fn ping() -> Option<&'static str> {
-	Some("pong")
+fn ping() -> anyhow::Result<Option<String>> {
+	Ok(Some("pong".into()))
 }
 
-async fn markov
-(client: TwitchClient, cmd: CommandSource)
--> anyhow::Result<Option<&'static str>> {
-	
+async fn markov(
+	pool: &SqlitePool,
+	cmd: &CommandSource
+) -> anyhow::Result<Option<String>> {
+	let mut output: Vec<String> = vec![cmd.args[0].clone()];
+	let mut seed = cmd.args[0].clone();
+	let rounds = &cmd.args[1].parse::<usize>()?;
+
+	for _ in 0..*rounds-1 {
+		let succ = db::get_rand_markov_succ(pool, &cmd.channel, &seed).await?;
+
+		seed = succ.clone();
+		output.push(succ.to_owned());
+	}
+
+	Ok(Some(output.join(" ")))
 }

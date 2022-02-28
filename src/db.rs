@@ -1,88 +1,90 @@
-use sqlx::{Connection, Sqlite, SqliteConnection};
+use rand::{self, Rng};
 
-// generate tables for Markov chains
-pub async fn index_tables_for_markov(db: &mut SqliteConnection)
--> anyhow::Result<()> {
-    let sql = r#"
-        SELECT 
-            name
-        FROM 
-            sqlite_schema
-        WHERE 
-            type ='table' AND 
-            name NOT LIKE 'sqlite_%';
-    "#;
+use sqlx::sqlite::SqlitePool;
+use sqlx::Sqlite;
 
-    let tables = sqlx::query::<Sqlite>(sql)
-        .execute(&mut *db)
-        .await?
-        .split(" ").collect::<&str>();
-    
-    let sql = r#"
-        SELECT 
-            COUNT
-        FROM 
-            $1;
-    "#;
-    
-    for table_name in tables {
-        // TODO: remake `try_create_table` such that it takes a literal, not a 
-        try_create_table(&pool, channel).await?;
+// QR == query result
+#[derive(sqlx::FromRow)]
+struct StringQR(String);
 
-        let mut count = sqlx::query::<Sqlite>(sql)
-            .bind(table_name)
-            .execute(&mut *db)
-            .await?
-            .parse::(u32).unwrap();
+// create table for current set channel (if it does not exist)
+pub async fn try_create_tables_for_channel(pool: &SqlitePool, name: &str) -> anyhow::Result<()> {
+	let mut conn = pool.acquire().await?;
+	let sql = include_str!("../assets/sql/channel_table.sql")
+		.replace("{{ TABLE_NAME }}", name);
 
-        let mut offset = 0;
-        while count != 0 {
-            let messages = sqlx::query::<Sqlite>("SELECT message FROM $1 LIMIT=100 OFFSET $2;")
-                .bind(table_name)
-                .bind(offset)
-                .execute(&mut *db)
-                .await?
-                .parse::(Vec<&str>).unwrap();
+	sqlx::query::<Sqlite>(&sql)
+		.execute(&mut *conn)
+		.await?;
 
-                for msg in messages {
-                    let words = msg.split(" ");
+	let sql = include_str!("../assets/sql/markov_index_table.sql")
+		.replace("{{ CHANNEL_NAME }}", name);
 
-                    for idx in words.len() {
-                        let pred = match idx {
-                            0 => "",
-                            _ => words[idx - 1],
-                        };
-                        let word = words[idx];
-                        let succ = match idx {
-                            words.len() - 1 => "",
-                            _ => words[idx + 1];
-                        }
+	sqlx::query::<Sqlite>(&sql)
+		.execute(&mut *conn)
+		.await?;
 
-                        // sqlx::query::<Sqlite>("INSERT INTO  FROM $1 LIMIT=100 OFFSET $2;")
-                        //     .bind(table_name)
-                        //     .bind(offset)
-                        //     .execute(&mut *db)
-                        //     .await?
-                        //     .parse::(Vec<&str>).unwrap();
-
-
-                        // TODO 
-                        // tohle je absolutní clusterfuck
-                        // https://www.sqlitetutorial.net/sqlite-attach-database/
-
-                    }
-
-                }
-            
-                
-                if messages.len() < 100 {
-                    break;
-                }
-
-                offset += 100;
-                count -= 100;
-        }
-        
-        
-    }
+	Ok(())
 }
+
+// save incoming messages to db
+pub async fn log(pool: &SqlitePool, privmsg: &twitch_irc::message::PrivmsgMessage) -> anyhow::Result<()> {
+	let mut conn = pool.acquire().await?;
+	let channel = &privmsg.source.params[0][1..];
+	let sql = include_str!("../assets/sql/log_message.sql")
+		.replace("{{ TABLE_NAME }}", channel);
+
+	sqlx::query::<Sqlite>(&sql)
+		.bind(&privmsg.sender.id)
+		.bind(&privmsg.sender.name)
+		.bind(&privmsg.badges.iter().map(|badge| format!("{}_", badge.name)).collect::<String>())
+		.bind(&format!("{}", &privmsg.server_timestamp))
+		.bind(&privmsg.message_text)
+		.execute(&mut *conn)
+		.await?;
+
+	Ok(())
+}
+
+pub async fn log_markov
+(pool: &SqlitePool, privmsg: &twitch_irc::message::PrivmsgMessage)
+-> anyhow::Result<()> {
+	let mut conn = pool.acquire().await?;
+
+	let words = privmsg.message_text.split(' ').collect::<Vec<&str>>();
+
+	for idx in 0..words.len() {
+		let word = words[idx];
+		let succ = if idx == words.len() - 1 { "" } else { words[idx + 1] };
+
+		let sql = &format!("INSERT INTO {}_MARKOV VALUES ($1, $2);", privmsg.source.params[0][1..].to_owned());
+
+		sqlx::query::<Sqlite>(sql)
+		    .bind(word)
+			.bind(succ)
+		    .execute(&mut *conn)
+		    .await?;
+	}
+
+	Ok(())
+}
+
+pub async fn get_rand_markov_succ<'a>(pool: &SqlitePool, channel: &str, word: &str) -> anyhow::Result<String> {
+	let mut conn = pool.acquire().await?;
+
+	let sql = &format!("SELECT succ from {channel}_MARKOV WHERE word=$1;");
+
+	let succs: Vec<String> = sqlx::query_as::<Sqlite, StringQR>(sql)
+		.bind(word)
+		.fetch_all(&mut *conn)
+		.await?
+		.iter()
+		.map(|succ| succ.0.clone())
+		.collect();
+	
+	let rand_succ = succs[rand::thread_rng().gen_range(0..succs.len())].clone();
+
+	Ok(rand_succ.into())
+}
+
+// fn test(s: &str) {}

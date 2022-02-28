@@ -6,14 +6,14 @@ use commands::handle_command;
 use sqlx::sqlite::SqlitePool;
 use dotenv::dotenv;
 
-use tracing::{info, error, warn};
-use tracing_subscriber;
+// use tracing::{info, error, warn};
+// use tracing_subscriber;
 
 use twitch_irc::login::StaticLoginCredentials;
 use twitch_irc::{ClientConfig, SecureTCPTransport, TwitchIRCClient};
 use twitch_irc::message::ServerMessage;
 
-use tokio_cron_scheduler::{JobScheduler, JobToRun, Job};
+// use tokio_cron_scheduler::{JobScheduler, JobToRun, Job};
 
 const DB_PATH: &str = "sqlite:db.db";
 
@@ -22,7 +22,7 @@ async fn main() -> anyhow::Result<()> {
 	// load environment variables from `.env` file
 	dotenv().ok();
 	// instantiate traces
-	tracing_subscriber::fmt::init();
+	// tracing_subscriber::fmt::init();
 
 	// instantiate running config from `config.json`
 	let config = match Config::from_config_file() {
@@ -35,22 +35,8 @@ async fn main() -> anyhow::Result<()> {
 	// create database tables for channels in config
 	// (if they do not already exist)
 	for channel in &config.channels {
-		db::try_create_table(&pool, channel).await?;
+		db::try_create_tables_for_channel(&pool, channel).await?;
 	}
-
-	// define scheduled tasks
-	// format of those is as follows:
-		// sec   min   hour   day of month   month   day of week   year
-		// *     *     *      *              *       *             *
-	let mut crons = JobScheduler::new();
-	crons.add(
-		Job::new_async("* 1/60 * * * *", |uuid, l| Box::pin( async {
-        	match db::index_tables_for_markov().await {
-				Ok(_) => info!("Channel tables have been successfully indexed for `markov` commands."),
-				Err(e) => error!("Channel tables could not be indexed for `markov` commands due to the following error: {}", e),
-			}
-		}
-	)).unwrap());
 
 	let twitch_nick = std::env::var("TWITCH_NICK").expect("Twitch nick is missing in .env").clone();
 	let twitch_oauth = std::env::var("TWITCH_OAUTH").expect("Twitch OAuth is missing in .env").clone();
@@ -79,13 +65,14 @@ async fn main() -> anyhow::Result<()> {
 
 				// TODO: 
 				// check whether these include messages of the bot itself,
-				// if so, get rid of those
+				// if so, get rid of them
 				db::log(&pool, &privmsg).await.unwrap();
+				db::log_markov(&pool, &privmsg).await.unwrap();
 
 				// if message is a command, handle it
 				if privmsg.message_text.chars().nth(0).unwrap() == config.prefix {
 					let cmd_src = CommandSource::from_privmsg(privmsg);
-					handle_command(client.clone(), cmd_src).await.unwrap();
+					handle_command(&pool, client.clone(), cmd_src).await.unwrap();
 				}
 			}
         }

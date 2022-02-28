@@ -1,4 +1,5 @@
 pub mod commands;
+pub mod db;
 
 use serde::{Serialize, Deserialize};
 
