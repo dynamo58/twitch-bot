@@ -62,10 +62,8 @@ async fn main() -> anyhow::Result<()> {
 			// privmsg == chat message
 			if let ServerMessage::Privmsg(privmsg) = message {
 				// log chat messages into database
-
-				// TODO: 
-				// check whether these include messages of the bot itself,
-				// if so, get rid of them
+				// (messages by the bot itself are not here,
+				//	, so that's taken care off)
 				db::log(&pool, &privmsg).await.unwrap();
 				db::log_markov(&pool, &privmsg).await.unwrap();
 

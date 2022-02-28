@@ -35,6 +35,14 @@ async fn markov(
 	let mut seed = cmd.args[0].clone();
 	let rounds = &cmd.args[1].parse::<usize>()?;
 
+	// TODO:
+		// secure if number of rounds is to big for the dataset
+		
+		// convert to lowercase ascii; remove whitespaces + ... + dots and shit
+
+		// provide feedback to user if there's invalid input / 
+		// bot unable to generate
+
 	for _ in 0..*rounds-1 {
 		let succ = db::get_rand_markov_succ(pool, &cmd.channel, &seed).await?;
 
