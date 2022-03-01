@@ -10,11 +10,11 @@ pub struct Config {
 	pub channels: Vec<String>,
 	pub disregarded_users: Vec<String>,
 	pub prefix: char,
+	pub index_markov: bool,
 }
 
 impl Config {
 	pub fn from_config_file() -> anyhow::Result<Config> {
-		// TODO
 		let json = std::fs::read_to_string(Path::new("assets/config.json"))?;
 		let deserialized: Config = serde_json::from_str(&json)?;
 

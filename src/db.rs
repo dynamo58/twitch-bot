@@ -3,6 +3,8 @@ use rand::{self, Rng};
 use sqlx::sqlite::SqlitePool;
 use sqlx::Sqlite;
 
+use thiserror::Error;
+
 // QR == query result
 #[derive(sqlx::FromRow)]
 struct StringQR(String);
@@ -57,8 +59,11 @@ pub async fn log_markov
 		let word = format_markov_entry(words[idx])?;
 		let succ = format_markov_entry(words[idx + 1])?;
 
-        if let (Ok(w), Ok(s)) = (word, succ) {
-            let sql = &format!("INSERT INTO {}_MARKOV VALUES ($1, $2);", privmsg.source.params[0][1..].to_owned());
+        if let (Some(w), Some(s)) = (word, succ) {
+            let sql = &format!(
+				"INSERT INTO {}_MARKOV (word, succ) VALUES ($1, $2);",
+				privmsg.source.params[0][1..].to_owned()
+			);
 
             sqlx::query::<Sqlite>(sql)
                 .bind(w)
@@ -71,21 +76,60 @@ pub async fn log_markov
 	Ok(())
 }
 
+    
+#[derive(Error, Debug)]
+enum MyError {
+	#[error("index out of bounds")]
+	OutOfBounds,
+}
+
 // format the words parsed from the message into format
 // acceptible for the db entry
 fn format_markov_entry(s: &str) -> anyhow::Result<Option<String>> {
     let mut out = s.to_owned();
-    let invalid_front_chars = vec![',', '.', ';', ' ', '⠀' /* this is the blank braille */]
-    let invalid_back_chars = vec![',', '.', ';', ' ', '⠀', '!', '?']
+    let invalid_front_chars = vec![
+		'\"',
+		'\'',
+		'«',
+		'「',
+		'“',
+		'‘',
+		'(',
+		'[',
+		'{',
+		',',
+		'.',
+		';',
+		' ',
+		'⠀' // this is a "blank" braille character
+	];
+    let invalid_back_chars = vec![
+		'\"',
+		'\'',
+		'»',
+		'」',
+		'”',
+		'’',
+		')',
+		']',
+		'}',
+		',',
+		'.',
+		';',
+		' ', // space
+		'⠀', // this is a "blank" braille character
+		'!',
+		'?'
+	];
     // the invisible braille char
-    
+
 
     // shave off all trailing unwanted chars
-    while invalid_fron_chars.contains(out.chars().nth(0)?) {
-        out.next();
+    while invalid_front_chars.contains(&out.chars().nth(0).ok_or(MyError::OutOfBounds)?) {
+        out.chars().next();
     }
 
-    while invalid_back_chars.contains(out.chars().last()?) {
+    while invalid_back_chars.contains(&out.chars().last().ok_or(MyError::OutOfBounds)?) {
         out.pop();
     }
 
@@ -97,7 +141,11 @@ fn format_markov_entry(s: &str) -> anyhow::Result<Option<String>> {
     }
 }
 
-pub async fn get_rand_markov_succ(pool: &SqlitePool, channel: &str, word: &str) -> anyhow::Result<String> {
+pub async fn get_rand_markov_succ(
+	pool: &SqlitePool,
+	channel: &str,
+	word: &str
+) -> anyhow::Result<Option<String>> {
 	let mut conn = pool.acquire().await?;
 
 	let sql = &format!("SELECT succ from {channel}_MARKOV WHERE word=$1;");
@@ -110,9 +158,11 @@ pub async fn get_rand_markov_succ(pool: &SqlitePool, channel: &str, word: &str) 
 		.map(|succ| succ.0.clone())
 		.collect();
 	
+	if succs.len() < 1 {
+		return Ok(None);
+	}
+
 	let rand_succ = succs[rand::thread_rng().gen_range(0..succs.len())].clone();
 
 	Ok(rand_succ.into())
 }
-
-// fn test(s: &str) {}

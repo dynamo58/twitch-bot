@@ -1,4 +1,6 @@
 {
+	"prefix": "$",
+	"index_markov": true,
 	"channels": [
 		"gisthekey",
 		"lovcen",
@@ -9,6 +11,5 @@
 		"Nightbot",
 		"Snusbot",
 		"StreamElements"
-	],
-	"prefix": "$"
+	]
 }

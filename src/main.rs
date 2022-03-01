@@ -65,12 +65,19 @@ async fn main() -> anyhow::Result<()> {
 				// (messages by the bot itself are not here,
 				//	, so that's taken care off)
 				db::log(&pool, &privmsg).await.unwrap();
-				db::log_markov(&pool, &privmsg).await.unwrap();
 
 				// if message is a command, handle it
 				if privmsg.message_text.chars().nth(0).unwrap() == config.prefix {
 					let cmd_src = CommandSource::from_privmsg(privmsg);
 					handle_command(&pool, client.clone(), cmd_src).await.unwrap();
+				} else {
+					// index for markov if enabled by config
+					if config.index_markov {
+						match db::log_markov(&pool, &privmsg).await {
+							Ok(_) => (),
+							Err(e) => println!("{e}"),
+						};
+					}
 				}
 			}
         }
