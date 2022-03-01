@@ -1,10 +1,13 @@
 use crate::CommandSource;
 use crate::db;
 
+use std::path::Path;
+
 use sqlx::sqlite::SqlitePool;
 
 type TwitchClient = twitch_irc::TwitchIRCClient<twitch_irc::transport::tcp::TCPTransport<twitch_irc::transport::tcp::TLS>, twitch_irc::login::StaticLoginCredentials>;
 
+// handle incoming commands
 pub async fn handle_command(
 	pool: &SqlitePool,
 	client: TwitchClient,
@@ -13,6 +16,8 @@ pub async fn handle_command(
 	let cmd_out = match cmd.cmd.as_str() {
 		"ping" => ping()?,
 		"markov" => markov(&pool, &cmd).await?,
+		// TODO: fix this possible runtime error; cba rn
+		"explain" => explain(cmd.arg[1]),
 		_ => None,
 	};
 
@@ -27,6 +32,7 @@ fn ping() -> anyhow::Result<Option<String>> {
 	Ok(Some("pong".into()))
 }
 
+// return a markov chain of words
 async fn markov(
 	pool: &SqlitePool,
 	cmd: &CommandSource
@@ -35,20 +41,26 @@ async fn markov(
 	let mut seed = cmd.args[0].clone();
 	let rounds = &cmd.args[1].parse::<usize>()?;
 
-	// TODO:
-		// secure if number of rounds is to big for the dataset
-		
-		// convert to lowercase ascii; remove whitespaces + ... + dots and shit
-
-		// provide feedback to user if there's invalid input / 
-		// bot unable to generate
-
 	for _ in 0..*rounds-1 {
-		let succ = db::get_rand_markov_succ(pool, &cmd.channel, &seed).await?;
+		let succ = match db::get_rand_markov_succ(pool, &cmd.channel, &seed).await {
+			Ok(successor) => successor,
+			Err(_) => break,
+		};
 
 		seed = succ.clone();
 		output.push(succ.to_owned());
 	}
 
+	if output.len() == 1 {
+		Ok(Some("That word has not been indexed yet | E1".into()))
+	}
+
 	Ok(Some(output.join(" ")))
+}
+
+fn explain (error_code: &str) -> anyhow::Result<Option<String>> {
+	let err_explanation = fs::read_to_string(Path::new(&format!("assets/explanations/{}.txt", error_code)))?;
+	// TODO: !!
+
+	Ok(err_explanation)
 }

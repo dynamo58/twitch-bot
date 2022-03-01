@@ -1,6 +1,8 @@
 pub mod commands;
 pub mod db;
 
+use std::path::Path;
+
 use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -12,7 +14,8 @@ pub struct Config {
 
 impl Config {
 	pub fn from_config_file() -> anyhow::Result<Config> {
-		let json = std::fs::read_to_string("config.json")?;
+		// TODO
+		let json = std::fs::read_to_string(Path::new("assets/config.json"))?;
 		let deserialized: Config = serde_json::from_str(&json)?;
 
 		Ok(deserialized)

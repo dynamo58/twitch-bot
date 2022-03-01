@@ -53,23 +53,51 @@ pub async fn log_markov
 
 	let words = privmsg.message_text.split(' ').collect::<Vec<&str>>();
 
-	for idx in 0..words.len() {
-		let word = words[idx];
-		let succ = if idx == words.len() - 1 { "" } else { words[idx + 1] };
+	for idx in 0..words.len()-1 {
+		let word = format_markov_entry(words[idx])?;
+		let succ = format_markov_entry(words[idx + 1])?;
 
-		let sql = &format!("INSERT INTO {}_MARKOV VALUES ($1, $2);", privmsg.source.params[0][1..].to_owned());
+        if let (Ok(w), Ok(s)) = (word, succ) {
+            let sql = &format!("INSERT INTO {}_MARKOV VALUES ($1, $2);", privmsg.source.params[0][1..].to_owned());
 
-		sqlx::query::<Sqlite>(sql)
-		    .bind(word)
-			.bind(succ)
-		    .execute(&mut *conn)
-		    .await?;
+            sqlx::query::<Sqlite>(sql)
+                .bind(w)
+                .bind(s)
+                .execute(&mut *conn)
+                .await?;
+        }
 	}
 
 	Ok(())
 }
 
-pub async fn get_rand_markov_succ<'a>(pool: &SqlitePool, channel: &str, word: &str) -> anyhow::Result<String> {
+// format the words parsed from the message into format
+// acceptible for the db entry
+fn format_markov_entry(s: &str) -> anyhow::Result<Option<String>> {
+    let mut out = s.to_owned();
+    let invalid_front_chars = vec![',', '.', ';', ' ', '⠀' /* this is the blank braille */]
+    let invalid_back_chars = vec![',', '.', ';', ' ', '⠀', '!', '?']
+    // the invisible braille char
+    
+
+    // shave off all trailing unwanted chars
+    while invalid_fron_chars.contains(out.chars().nth(0)?) {
+        out.next();
+    }
+
+    while invalid_back_chars.contains(out.chars().last()?) {
+        out.pop();
+    }
+
+    // if there is still the blank braille's, 
+    if out.contains("⠀") { 
+        Ok(None)
+    } else {
+        Ok(Some(out.to_lowercase()))
+    }
+}
+
+pub async fn get_rand_markov_succ(pool: &SqlitePool, channel: &str, word: &str) -> anyhow::Result<String> {
 	let mut conn = pool.acquire().await?;
 
 	let sql = &format!("SELECT succ from {channel}_MARKOV WHERE word=$1;");
