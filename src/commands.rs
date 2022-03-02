@@ -1,4 +1,4 @@
-use crate::{CommandSource, Sender};
+use crate::{Sender, CommandSource};
 use crate::db;
 
 use std::path::Path;
@@ -16,10 +16,9 @@ pub async fn handle_command(
 	let cmd_out = match cmd.cmd.as_str() {
 		"ping" => ping()?,
 		"markov" => markov(&pool, &cmd).await?,
-		// TODO: fix this possible runtime error; cba rn
-		"explain" => explain(&cmd.args[1])?,
-		"echo" => echo(&cmd.args[1])?,
-		"remindme" => add_reminder(&cmd.sender),
+		"explain" => explain(&cmd.args[0])?,
+		"echo" => echo(&cmd.args)?,
+		"remindme" => add_reminder(&pool, &cmd.sender)?,
 		_ => None,
 	};
 
@@ -30,9 +29,12 @@ pub async fn handle_command(
 	Ok(())
 }
 
-fn add_reminder(user: &Sender)
--> anyhow::Result<Option<String>> {
+fn add_reminder(
+	pool: &SqlitePool,
+	cuser: &Sender,
+) -> anyhow::Result<Option<String>> {
 	
+	todo!()
 }
 
 fn ping()
@@ -69,7 +71,7 @@ async fn markov(
 
 	for _ in 0..rounds-1 {
 		let succ = match db::get_rand_markov_succ(pool, &cmd.channel, &seed).await {
-			Ok(Some(successor)) => successor,
+		Ok(Some(successor)) => successor,
 			Ok(None) => continue,
 			Err(e) => {println!("{e}");break},
 		};

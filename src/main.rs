@@ -1,7 +1,7 @@
 mod commands;
 mod db;
 
-use twitch_bot::{Config, CommandSource};
+use twitch_bot::{Config, CommandSource, Sender};
 use commands::handle_command;
 use sqlx::sqlite::SqlitePool;
 use dotenv::dotenv;
@@ -30,12 +30,20 @@ async fn main() -> anyhow::Result<()> {
 		Err(_) => panic!("Couldn't load config, aborting."),
 	};
 	// instantiate database connection pool
-    let pool = SqlitePool::connect(DB_PATH).await?;
+    let pool = SqlitePool::connect(DB_PATH)
+		.await
+		.expect("Database connection could not be established, aborting.");
+
+	db::init_db(&pool)
+		.await
+		.expect("Database could not be set up, aborting.");
 
 	// create database tables for channels in config
 	// (if they do not already exist)
 	for channel in &config.channels {
-		db::try_create_tables_for_channel(&pool, channel).await?;
+		db::try_create_tables_for_channel(&pool, channel)
+			.await
+			.expect(&format!("Could not connect to channel {}, aborting", channel));
 	}
 
 	let twitch_nick = std::env::var("TWITCH_NICK").expect("Twitch nick is missing in .env").clone();
@@ -61,6 +69,10 @@ async fn main() -> anyhow::Result<()> {
         while let Some(message) = incoming_messages.recv().await {
 			// privmsg == chat message
 			if let ServerMessage::Privmsg(privmsg) = message {
+				if config.disregarded_users.contains(&privmsg.sender.login) {
+					return;
+				}
+
 				// log chat messages into database
 				// (messages by the bot itself are not here,
 				//	, so that's taken care off)

@@ -16,9 +16,11 @@ pub struct Config {
 impl Config {
 	pub fn from_config_file() -> anyhow::Result<Config> {
 		let json = std::fs::read_to_string(Path::new("assets/config.json"))?;
-		let deserialized: Config = serde_json::from_str(&json)?;
+		let mut config: Config = serde_json::from_str(&json)?;
 
-		Ok(deserialized)
+		config.disregarded_users = config.disregarded_users.iter().map(|user| user.to_lowercase()).collect(); 
+
+		Ok(config)
 	}
 }
 

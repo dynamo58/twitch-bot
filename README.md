@@ -8,7 +8,8 @@ A simple and sophisticated Twitch bot in Rust.
 | ---     | ---  | ---         |
 | ping    | None | responds with "pong" |
 | explain | [error code: str] | tries to respond with error in assets/explanations |
-| markov  | [start word: str] [word count: int]
+| markov  | [start word: str] [word count: int] | responds with a markov chain generated from saved chat messages |
+| echo    | \[text\] | repeats user's message |
 
 # Get started
 

@@ -9,8 +9,15 @@ use thiserror::Error;
 #[derive(sqlx::FromRow)]
 struct StringQR(String);
 
-pub init_db -> anyhow::Result<()> {
-	todo!()
+pub async fn init_db(pool: &SqlitePool) -> anyhow::Result<()> {
+	let mut conn = pool.acquire().await?;
+	let sql = include_str!("../assets/sql/init_db.sql");
+
+	sqlx::query::<Sqlite>(&sql)
+		.execute(&mut *conn)
+		.await?;
+	
+	Ok(())
 }
 
 // create table for current set channel (if it does not exist)
@@ -92,7 +99,7 @@ enum MyError {
 fn format_markov_entry(s: &str) -> anyhow::Result<Option<String>> {
     let mut out = s.to_owned();
     let invalid_front_chars = vec![
-		'\"',
+		'"',
 		'\'',
 		'«',
 		'「',
@@ -108,7 +115,7 @@ fn format_markov_entry(s: &str) -> anyhow::Result<Option<String>> {
 		'⠀' // this is a "blank" braille character
 	];
     let invalid_back_chars = vec![
-		'\"',
+		'"',
 		'\'',
 		'»',
 		'」',
@@ -126,7 +133,6 @@ fn format_markov_entry(s: &str) -> anyhow::Result<Option<String>> {
 		'?'
 	];
     // the invisible braille char
-
 
     // shave off all trailing unwanted chars
     while invalid_front_chars.contains(&out.chars().nth(0).ok_or(MyError::OutOfBounds)?) {
