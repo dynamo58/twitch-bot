@@ -1,4 +1,4 @@
-use crate::CommandSource;
+use crate::{CommandSource, Sender};
 use crate::db;
 
 use std::path::Path;
@@ -18,6 +18,8 @@ pub async fn handle_command(
 		"markov" => markov(&pool, &cmd).await?,
 		// TODO: fix this possible runtime error; cba rn
 		"explain" => explain(&cmd.args[1])?,
+		"echo" => echo(&cmd.args[1])?,
+		"remindme" => add_reminder(&cmd.sender),
 		_ => None,
 	};
 
@@ -28,8 +30,19 @@ pub async fn handle_command(
 	Ok(())
 }
 
-fn ping() -> anyhow::Result<Option<String>> {
+fn add_reminder(user: &Sender)
+-> anyhow::Result<Option<String>> {
+	
+}
+
+fn ping()
+-> anyhow::Result<Option<String>> {
 	Ok(Some("pong".into()))
+}
+
+fn echo(args: &Vec<String>)
+-> anyhow::Result<Option<String>> {
+	Ok(Some(args.join(" ")))
 }
 
 // return a markov chain of words

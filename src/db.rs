@@ -9,6 +9,10 @@ use thiserror::Error;
 #[derive(sqlx::FromRow)]
 struct StringQR(String);
 
+pub init_db -> anyhow::Result<()> {
+	todo!()
+}
+
 // create table for current set channel (if it does not exist)
 pub async fn try_create_tables_for_channel(pool: &SqlitePool, name: &str) -> anyhow::Result<()> {
 	let mut conn = pool.acquire().await?;
