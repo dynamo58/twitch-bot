@@ -2,7 +2,9 @@ use crate::{Sender, CommandSource};
 use crate::db;
 
 use std::path::Path;
+use std::time::SystemTime;
 
+use chrono::{DateTime, Utc, Duration};
 use sqlx::sqlite::SqlitePool;
 
 type TwitchClient = twitch_irc::TwitchIRCClient<twitch_irc::transport::tcp::TCPTransport<twitch_irc::transport::tcp::TLS>, twitch_irc::login::StaticLoginCredentials>;
@@ -18,7 +20,7 @@ pub async fn handle_command(
 		"markov" => markov(&pool, &cmd).await?,
 		"explain" => explain(&cmd.args[0])?,
 		"echo" => echo(&cmd.args)?,
-		"remindme" => add_reminder(&pool, &cmd.sender)?,
+		"remindme" => add_reminder(&pool, &cmd)?,
 		_ => None,
 	};
 
@@ -29,12 +31,33 @@ pub async fn handle_command(
 	Ok(())
 }
 
+// \(xh,xm\) \[text\] 
+
+fn parse_duration_to_hm(s: &String) -> anyhow::Result<(u32, u32)> {
+	let hrs  = s[s.find('(')+1..s.find('h')].to_owned().parse()?;
+	let mins = s[s.find(',')+1..s.find('m')].to_owned().parse()?;
+
+	(hrs, mins)
+} 
+
 fn add_reminder(
 	pool: &SqlitePool,
-	cuser: &Sender,
+	cmd: &CommandSource,
 ) -> anyhow::Result<Option<String>> {
-	
-	todo!()
+	let (h, m) = parse_duration_to_hm(cmd.args[0]);
+	let remind_time = cmd.timestamp + Duration::hours(h) + Duration::minutes(m);
+
+	let reminder = db::Reminder {
+		from_user_name: cmd.sender.name,
+		// todo api to translate nick to id
+		to_user_id: todo!(),
+		raise_timestamp: remind_time,
+		message: cmd.args[2..],
+	}
+
+	db::insert_reminder(reminder).await?;
+
+	Ok(Some("Reminder set successfully."))
 }
 
 fn ping()

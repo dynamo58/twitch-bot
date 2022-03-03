@@ -3,6 +3,7 @@ pub mod db;
 
 use std::path::Path;
 
+use chrono::DateTime;
 use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -45,6 +46,7 @@ pub struct CommandSource {
 	pub sender: Sender,
 	pub channel: String,
 	pub statuses: Vec<TwitchStatus>,
+	pub timestamp: DateTime<Utc>,
 }
 
 impl CommandSource {
@@ -76,8 +78,7 @@ impl CommandSource {
 			sender: sender,
 			channel: privmsg.source.params[0][1..].to_owned(),
 			statuses: badges,
+			timestamp: privmsg.server_timestamp,
 		}
 	}
 }
-
-// pub type CommandOutput<'a> = Option<(String, &'a str)>;

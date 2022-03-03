@@ -1,5 +1,7 @@
 use rand::{self, Rng};
 
+use chrono::{DateTime, Utc};
+
 use sqlx::sqlite::SqlitePool;
 use sqlx::Sqlite;
 
@@ -9,7 +11,17 @@ use thiserror::Error;
 #[derive(sqlx::FromRow)]
 struct StringQR(String);
 
-pub async fn init_db(pool: &SqlitePool) -> anyhow::Result<()> {
+#[derive(sqlx::FromRow)]
+pub struct Reminder {
+    from_user_name: String,
+    to_user_id: i32,
+    raise_timestamp: DateTime<Utc>,
+    message: String
+}
+
+pub async fn init_db(
+    pool: &SqlitePool,
+) -> anyhow::Result<()> {
 	let mut conn = pool.acquire().await?;
 	let sql = include_str!("../assets/sql/init_db.sql");
 
@@ -21,7 +33,10 @@ pub async fn init_db(pool: &SqlitePool) -> anyhow::Result<()> {
 }
 
 // create table for current set channel (if it does not exist)
-pub async fn try_create_tables_for_channel(pool: &SqlitePool, name: &str) -> anyhow::Result<()> {
+pub async fn try_create_tables_for_channel(
+    pool: &SqlitePool,
+    name: &str,
+) -> anyhow::Result<()> {
 	let mut conn = pool.acquire().await?;
 	let sql = include_str!("../assets/sql/channel_table.sql")
 		.replace("{{ TABLE_NAME }}", name);
@@ -41,11 +56,20 @@ pub async fn try_create_tables_for_channel(pool: &SqlitePool, name: &str) -> any
 }
 
 // save incoming messages to db
-pub async fn log(pool: &SqlitePool, privmsg: &twitch_irc::message::PrivmsgMessage) -> anyhow::Result<()> {
+pub async fn log(
+    pool: &SqlitePool,
+    privmsg: &twitch_irc::message::PrivmsgMessage,
+) -> anyhow::Result<()> {
 	let mut conn = pool.acquire().await?;
 	let channel = &privmsg.source.params[0][1..];
-	let sql = include_str!("../assets/sql/log_message.sql")
-		.replace("{{ TABLE_NAME }}", channel);
+
+    let sql = r#"
+    INSERT
+        INTO {{ TABLE_NAME }} 
+	        (sender_id, sender_nick, badges, timestamp, message)
+        VALUES
+	        (?1, ?2, ?3, ?4, ?5)
+    "#.replace("{{ TABLE_NAME }}", channel);
 
 	sqlx::query::<Sqlite>(&sql)
 		.bind(&privmsg.sender.id)
@@ -59,9 +83,10 @@ pub async fn log(pool: &SqlitePool, privmsg: &twitch_irc::message::PrivmsgMessag
 	Ok(())
 }
 
-pub async fn log_markov
-(pool: &SqlitePool, privmsg: &twitch_irc::message::PrivmsgMessage)
--> anyhow::Result<()> {
+pub async fn log_markov(
+    pool: &SqlitePool,
+    privmsg: &twitch_irc::message::PrivmsgMessage
+) -> anyhow::Result<()> {
 	let mut conn = pool.acquire().await?;
 
 	let words = privmsg.message_text.split(' ').collect::<Vec<&str>>();
@@ -87,7 +112,6 @@ pub async fn log_markov
 	Ok(())
 }
 
-    
 #[derive(Error, Debug)]
 enum MyError {
 	#[error("index out of bounds")]
@@ -96,7 +120,8 @@ enum MyError {
 
 // format the words parsed from the message into format
 // acceptible for the db entry
-fn format_markov_entry(s: &str) -> anyhow::Result<Option<String>> {
+fn format_markov_entry(s: &str)
+-> anyhow::Result<Option<String>> {
     let mut out = s.to_owned();
     let invalid_front_chars = vec![
 		'"',
@@ -175,4 +200,32 @@ pub async fn get_rand_markov_succ(
 	let rand_succ = succs[rand::thread_rng().gen_range(0..succs.len())].clone();
 
 	Ok(rand_succ.into())
+}
+
+// insert a reminder for a user
+pub async fn add_reminder(
+    pool: SqlitePool,
+    reminder: &Reminder,
+) -> anyhow::Result<Option<String>> {
+	let mut conn = pool.acquire().await?;
+
+    // TODO: check
+    let sql = r#"
+        INSERT 
+            INTO user_reminders 
+                (from_user_name, for_user_id, raise_timestamp, message)
+            VALUES
+                (?1, ?2, ?3, ?4);
+    "#;
+
+	sqlx::query::<Sqlite>(&sql)
+		.bind(reminder.from_user_name)
+		.bind(reminder.to_user_id)
+		.bind(&format!("{}", &reminder.raise_timestamp))
+		.bind(reminder.message)
+
+		.execute(&mut *conn)
+		.await?;
+    
+    Ok(())
 }
