@@ -3,8 +3,18 @@ pub mod db;
 
 use std::path::Path;
 
-use chrono::DateTime;
+
+use chrono::{DateTime, Utc, Local};
 use serde::{Serialize, Deserialize};
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum MyError {
+	#[error("index out of bounds")]
+	OutOfBounds,
+	#[error("item not found")]
+	NotFound,
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Config {

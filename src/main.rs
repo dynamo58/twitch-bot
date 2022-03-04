@@ -1,7 +1,7 @@
 mod commands;
 mod db;
 
-use twitch_bot::{Config, CommandSource, Sender};
+use twitch_bot::{Config, CommandSource, Sender, MyError};
 use commands::handle_command;
 use sqlx::sqlite::SqlitePool;
 use dotenv::dotenv;
@@ -76,7 +76,20 @@ async fn main() -> anyhow::Result<()> {
 				// log chat messages into database
 				// (messages by the bot itself are not here,
 				//	, so that's taken care off)
-				db::log(&pool, &privmsg).await.unwrap();
+				match db::log(&pool, &privmsg).await {
+					Ok(_) => (),
+					Err(e) => println!("{e}"),
+				}
+
+				// check if user has any reminders set for him
+				let reminders =  db::check_for_reminders(&pool, &privmsg.sender.login).await.unwrap();
+
+				if let Some(rs) = reminders {
+					for r in &rs {
+						client.clone().say(privmsg.source.params[0][1..].to_owned(), format!("@{}, you've got a reminder from {}: {}", r.for_user_name, r.from_user_name, r.message));
+					}
+				}
+
 
 				// if message is a command, handle it
 				if privmsg.message_text.chars().nth(0).unwrap() == config.prefix {
