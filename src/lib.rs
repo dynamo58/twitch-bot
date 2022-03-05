@@ -3,8 +3,18 @@ pub mod db;
 
 use std::path::Path;
 
-use chrono::DateTime;
+
+use chrono::{DateTime, Utc};
 use serde::{Serialize, Deserialize};
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum MyError {
+	#[error("index out of bounds")]
+	OutOfBounds,
+	#[error("item not found")]
+	NotFound,
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Config {
@@ -33,6 +43,7 @@ pub enum TwitchStatus {
 	Staff,
 	Subscriber,
 	Vip,
+	Premium,
 }
 
 pub struct Sender {
@@ -68,7 +79,8 @@ impl CommandSource {
 			"staff" => TwitchStatus::Staff,
 			"subscriber" => TwitchStatus::Subscriber,
 			"vip" => TwitchStatus::Vip,
-			_ => {println!("{badge:#?}");unreachable!()},
+			"premium" => TwitchStatus::Premium,
+			_ => {println!("{}", badge.name); unreachable!()}
 		})
 		.collect();
 

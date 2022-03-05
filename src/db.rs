@@ -5,18 +5,19 @@ use chrono::{DateTime, Utc};
 use sqlx::sqlite::SqlitePool;
 use sqlx::Sqlite;
 
-use thiserror::Error;
+use crate::MyError;
 
 // QR == query result
 #[derive(sqlx::FromRow)]
 struct StringQR(String);
 
-#[derive(sqlx::FromRow)]
+#[derive(sqlx::FromRow, Debug)]
 pub struct Reminder {
-    from_user_name: String,
-    to_user_id: i32,
-    raise_timestamp: DateTime<Utc>,
-    message: String
+	pub id: i32,
+    pub from_user_name: String,
+    pub for_user_name: String,
+    pub raise_timestamp: DateTime<Utc>,
+    pub message: String
 }
 
 pub async fn init_db(
@@ -83,6 +84,7 @@ pub async fn log(
 	Ok(())
 }
 
+// processes message for markov index table entries
 pub async fn log_markov(
     pool: &SqlitePool,
     privmsg: &twitch_irc::message::PrivmsgMessage
@@ -92,16 +94,25 @@ pub async fn log_markov(
 	let words = privmsg.message_text.split(' ').collect::<Vec<&str>>();
 
 	for idx in 0..words.len()-1 {
-		let word = format_markov_entry(words[idx])?;
-		let succ = format_markov_entry(words[idx + 1])?;
+		let word = match format_markov_entry(words[idx]) {
+			Ok(a) => a,
+			Err(_) => return Ok(()),
+		};
+		let succ = match format_markov_entry(words[idx + 1]) {
+			Ok(a) => a,
+			Err(_) => return Ok(()),
+		};
 
         if let (Some(w), Some(s)) = (word, succ) {
-            let sql = &format!(
-				"INSERT INTO {}_MARKOV (word, succ) VALUES ($1, $2);",
-				privmsg.source.params[0][1..].to_owned()
-			);
-
-            sqlx::query::<Sqlite>(sql)
+            let sql = r#"
+				INSERT 
+					INTO {{ CHANNEL_NAME }}_MARKOV
+						(word, succ) 
+					VALUES
+						($1, $2);
+			"#.replace("{{ CHANNEL_NAME }}", &privmsg.source.params[0][1..].to_owned());
+				
+            sqlx::query::<Sqlite>(&sql)
                 .bind(w)
                 .bind(s)
                 .execute(&mut *conn)
@@ -112,10 +123,63 @@ pub async fn log_markov(
 	Ok(())
 }
 
-#[derive(Error, Debug)]
-enum MyError {
-	#[error("index out of bounds")]
-	OutOfBounds,
+// checks for reminders of a specified user, return & delete them
+pub async fn check_for_reminders(
+	pool: &SqlitePool,
+	name: &str,
+) -> anyhow::Result<Option<Vec<Reminder>>> {
+	let mut conn = pool.acquire().await?;
+
+	// query reminders
+	dbg!(1);
+	let sql = r#"
+		SELECT *
+			FROM user_reminders
+			WHERE
+				for_user_name=?1
+			AND raise_timestamp <= DATETIME('NOW');
+	"#;
+
+	println!("{name}");
+	println!("{sql}");
+
+	let reminders: Vec<Reminder> = sqlx::query_as::<Sqlite, Reminder>(&sql)
+		.bind(&name)
+		.fetch_all(&mut *conn)
+		.await?;
+
+	dbg!(&reminders);
+	
+	if reminders.len() == 0 {
+		return Ok(None);
+	}
+
+	// delete reminders
+
+	let sql = r#"
+		DELETE
+			FROM user_reminders
+			WHERE
+				id in (?1);
+	"#;
+
+	sqlx::query::<Sqlite>(&sql)
+		.bind({
+			let mut foo = reminders
+				.iter()
+				.map(|x| format!("'{}',", x.id))
+				.collect::<Vec<String>>()
+				.join("");
+			foo.pop();
+			foo
+		})
+		.execute(&mut *conn)
+		.await?;
+
+	dbg!(3);
+
+	// return the queried ones
+	Ok(Some(reminders))
 }
 
 // format the words parsed from the message into format
@@ -161,21 +225,23 @@ fn format_markov_entry(s: &str)
 
     // shave off all trailing unwanted chars
     while invalid_front_chars.contains(&out.chars().nth(0).ok_or(MyError::OutOfBounds)?) {
-        out.chars().next();
+        out.remove(0);
     }
 
     while invalid_back_chars.contains(&out.chars().last().ok_or(MyError::OutOfBounds)?) {
         out.pop();
     }
 
-    // if there is still the blank braille's, 
-    if out.contains("⠀") { 
+    // if there is still the blank braille's or it is a link
+	// don't remove anything; else remove the formatted word
+    if out.contains("⠀") || out.contains("//") || out.contains("www.") || out == "".to_string() { 
         Ok(None)
     } else {
         Ok(Some(out.to_lowercase()))
     }
 }
 
+// get a random successor of specified word from the markov index table
 pub async fn get_rand_markov_succ(
 	pool: &SqlitePool,
 	channel: &str,
@@ -183,9 +249,14 @@ pub async fn get_rand_markov_succ(
 ) -> anyhow::Result<Option<String>> {
 	let mut conn = pool.acquire().await?;
 
-	let sql = &format!("SELECT succ from {channel}_MARKOV WHERE word=$1;");
+	let sql = r#"
+		SELECT succ
+			FROM {{ CHANNEL_NAME }}_MARKOV
+			WHERE
+				word=$1;
+	"#.replace("{{ CHANNEL_NAME }}", channel);
 
-	let succs: Vec<String> = sqlx::query_as::<Sqlite, StringQR>(sql)
+	let succs: Vec<String> = sqlx::query_as::<Sqlite, StringQR>(&sql)
 		.bind(word)
 		.fetch_all(&mut *conn)
 		.await?
@@ -203,27 +274,25 @@ pub async fn get_rand_markov_succ(
 }
 
 // insert a reminder for a user
-pub async fn add_reminder(
-    pool: SqlitePool,
+pub async fn insert_reminder(
+    pool: &SqlitePool,
     reminder: &Reminder,
-) -> anyhow::Result<Option<String>> {
+) -> anyhow::Result<()> {
 	let mut conn = pool.acquire().await?;
 
-    // TODO: check
     let sql = r#"
         INSERT 
             INTO user_reminders 
-                (from_user_name, for_user_id, raise_timestamp, message)
+                (from_user_name, for_user_name, raise_timestamp, message)
             VALUES
                 (?1, ?2, ?3, ?4);
     "#;
 
 	sqlx::query::<Sqlite>(&sql)
-		.bind(reminder.from_user_name)
-		.bind(reminder.to_user_id)
-		.bind(&format!("{}", &reminder.raise_timestamp))
-		.bind(reminder.message)
-
+		.bind(&reminder.from_user_name)
+		.bind(&reminder.for_user_name)
+		.bind(&format!("{}", reminder.raise_timestamp))
+		.bind(&reminder.message)
 		.execute(&mut *conn)
 		.await?;
     

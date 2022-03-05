@@ -1,10 +1,9 @@
-use crate::{Sender, CommandSource};
+use crate::{CommandSource, MyError};
 use crate::db;
 
 use std::path::Path;
-use std::time::SystemTime;
 
-use chrono::{DateTime, Utc, Duration};
+use chrono::Duration;
 use sqlx::sqlite::SqlitePool;
 
 type TwitchClient = twitch_irc::TwitchIRCClient<twitch_irc::transport::tcp::TCPTransport<twitch_irc::transport::tcp::TLS>, twitch_irc::login::StaticLoginCredentials>;
@@ -20,7 +19,8 @@ pub async fn handle_command(
 		"markov" => markov(&pool, &cmd).await?,
 		"explain" => explain(&cmd.args[0])?,
 		"echo" => echo(&cmd.args)?,
-		"remindme" => add_reminder(&pool, &cmd)?,
+		"remind" => add_reminder(&pool, &cmd, false).await?,
+		"remindme" => add_reminder(&pool, &cmd, true).await?,
 		_ => None,
 	};
 
@@ -33,32 +33,58 @@ pub async fn handle_command(
 
 // \(xh,xm\) \[text\] 
 
-fn parse_duration_to_hm(s: &String) -> anyhow::Result<(u32, u32)> {
-	let hrs  = s[s.find('(')+1..s.find('h')].to_owned().parse()?;
-	let mins = s[s.find(',')+1..s.find('m')].to_owned().parse()?;
+fn parse_duration_to_hm(s: &String) -> anyhow::Result<(i64, i64)> {
+	let hrs  = s[s.find('(').ok_or(MyError::NotFound)?+1..s.find('h').ok_or(MyError::NotFound)?].to_owned().parse()?;
+	let mins = s[s.find(',').ok_or(MyError::NotFound)?+1..s.find('m').ok_or(MyError::NotFound)?].to_owned().parse()?;
 
-	(hrs, mins)
+	Ok((hrs, mins))
 } 
 
-fn add_reminder(
+async fn add_reminder(
 	pool: &SqlitePool,
 	cmd: &CommandSource,
+	is_for_self: bool,
 ) -> anyhow::Result<Option<String>> {
-	let (h, m) = parse_duration_to_hm(cmd.args[0]);
+	let (h, m) = match parse_duration_to_hm(&cmd.args[0]) {
+		Ok(a) => a,
+		Err(_) => return Ok(Some("Bad time formatting.".into()))
+	};
+
 	let remind_time = cmd.timestamp + Duration::hours(h) + Duration::minutes(m);
+	
+	let to_user_name = match is_for_self {
+		true => &cmd.sender.name,
+		false => match cmd.args.get(1).ok_or(MyError::OutOfBounds) {
+			Ok(a) => a,
+			Err(_) => return Ok(Some("No name provided.".into())),
+		}
+	};
+
+	let message = match cmd.args.get(2).ok_or(MyError::OutOfBounds) {
+		Ok(_) => cmd.args[2..].join(" "),
+		Err(_) => return Ok(Some("No message provided.".into())),
+	};
 
 	let reminder = db::Reminder {
-		from_user_name: cmd.sender.name,
-		// todo api to translate nick to id
-		to_user_id: todo!(),
+		// dummy
+		id: 0,
+		from_user_name: cmd.sender.name.clone(),
+		for_user_name: to_user_name.clone(),
 		raise_timestamp: remind_time,
-		message: cmd.args[2..],
-	}
+		message: message,
+	};
 
-	db::insert_reminder(reminder).await?;
+	db::insert_reminder(pool, &reminder).await?;
 
-	Ok(Some("Reminder set successfully."))
+	Ok(Some("Reminder set successfully.".into()))
 }
+
+// async fn remove_reminder(
+// 	pool: &SqlitePool,
+// 	id: i32,
+// ) -> anyhow::Result<Option<String>> {
+
+// }
 
 fn ping()
 -> anyhow::Result<Option<String>> {
