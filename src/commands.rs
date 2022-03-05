@@ -60,7 +60,8 @@ async fn add_reminder(
 		}
 	};
 
-	let message = match cmd.args.get(2).ok_or(MyError::OutOfBounds) {
+	let start_idx = if is_for_self { 1 } else { 2 };
+	let message = match cmd.args.get(start_idx).ok_or(MyError::OutOfBounds) {
 		Ok(_) => cmd.args[2..].join(" "),
 		Err(_) => return Ok(Some("No message provided.".into())),
 	};

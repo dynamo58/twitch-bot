@@ -131,7 +131,6 @@ pub async fn check_for_reminders(
 	let mut conn = pool.acquire().await?;
 
 	// query reminders
-	dbg!(1);
 	let sql = r#"
 		SELECT *
 			FROM user_reminders
@@ -140,16 +139,11 @@ pub async fn check_for_reminders(
 			AND raise_timestamp <= DATETIME('NOW');
 	"#;
 
-	println!("{name}");
-	println!("{sql}");
-
 	let reminders: Vec<Reminder> = sqlx::query_as::<Sqlite, Reminder>(&sql)
 		.bind(&name)
 		.fetch_all(&mut *conn)
 		.await?;
 
-	dbg!(&reminders);
-	
 	if reminders.len() == 0 {
 		return Ok(None);
 	}
@@ -163,20 +157,12 @@ pub async fn check_for_reminders(
 				id in (?1);
 	"#;
 
-	sqlx::query::<Sqlite>(&sql)
-		.bind({
-			let mut foo = reminders
-				.iter()
-				.map(|x| format!("'{}',", x.id))
-				.collect::<Vec<String>>()
-				.join("");
-			foo.pop();
-			foo
-		})
+	for r in &reminders {
+		sqlx::query::<Sqlite>(&sql)
+		.bind(r.id)
 		.execute(&mut *conn)
 		.await?;
-
-	dbg!(3);
+	}
 
 	// return the queried ones
 	Ok(Some(reminders))
@@ -292,7 +278,7 @@ pub async fn insert_reminder(
 	sqlx::query::<Sqlite>(&sql)
 		.bind(&reminder.from_user_name)
 		.bind(&reminder.for_user_name)
-		.bind(&format!("{}", reminder.raise_timestamp))
+		.bind(&format!("{}", reminder.raise_timestamp.format("%Y-%m-%d %H:%M:%S").to_string()))
 		.bind(&reminder.message)
 		.execute(&mut *conn)
 		.await?;

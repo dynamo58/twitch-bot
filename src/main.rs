@@ -80,13 +80,14 @@ async fn main() -> anyhow::Result<()> {
 
 				if let Some(rs) = reminders {
 					for r in &rs {
+						let from = if r.from_user_name == r.for_user_name { "yourself" } else { &r.from_user_name };
+						
 						client.clone().say(
 							privmsg.source.params[0][1..].to_owned(),
-							format!("@{}, you've got a reminder from {}: {}", r.for_user_name, r.from_user_name, r.message)
+							format!("@{} 🗨🔔 from {}: {}", r.for_user_name, from, r.message)
 						).await.unwrap();
 					}
 				}
-
 
 				// if message is a command, handle it
 				if privmsg.message_text.chars().nth(0).unwrap() == config.prefix {
