@@ -182,6 +182,7 @@ pub async fn check_for_reminders(
 	Ok(Some(reminders))
 }
 
+
 // format the words parsed from the message into format
 // acceptible for the db entry
 fn format_markov_entry(s: &str)
