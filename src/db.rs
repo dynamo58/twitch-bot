@@ -11,6 +11,9 @@ use crate::MyError;
 #[derive(sqlx::FromRow)]
 struct StringQR(String);
 
+#[derive(sqlx::FromRow)]
+struct I32QR(i32);
+
 #[derive(sqlx::FromRow, Debug)]
 pub struct Reminder {
 	pub id: i32,
@@ -227,6 +230,29 @@ fn format_markov_entry(s: &str)
         Ok(Some(out.to_lowercase()))
     }
 }
+
+pub async fn clear_users_sent_reminders(
+	pool: &SqlitePool,
+	user_name: &str,
+) -> anyhow::Result<i32> {
+	let mut conn = pool.acquire().await?;
+
+	let sql = r#"
+		DELETE
+			FROM user_reminders
+			WHERE
+				from_user_name=$1;
+		SELECT changes();
+	"#;
+
+	let num_affected: i32 = sqlx::query_as::<Sqlite, I32QR>(&sql)
+		.bind(user_name)
+		.fetch_all(&mut *conn)
+		.await?
+		[0].0;
+
+		Ok(num_affected)
+	} 
 
 // get a random successor of specified word from the markov index table
 pub async fn get_rand_markov_succ(

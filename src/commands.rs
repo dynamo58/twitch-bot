@@ -15,13 +15,23 @@ pub async fn handle_command(
 	cmd: CommandSource
 ) -> anyhow::Result<()> {
 	let cmd_out = match cmd.cmd.as_str() {
-		"ping" => ping()?,
-		"markov" => markov(&pool, &cmd).await?,
-		"explain" => explain(&cmd.args[0])?,
-		"echo" => echo(&cmd.args)?,
-		"remind" => add_reminder(&pool, &cmd, false).await?,
-		"remindme" => add_reminder(&pool, &cmd, true).await?,
-		_ => None,
+		"ping"           => ping(),
+		"markov"         => markov(&pool, &cmd).await,
+		"explain"        => explain(&cmd.args[0]),
+		"echo"           => echo(&cmd.args),
+		"remind"         => add_reminder(&pool, &cmd, false).await,
+		"remindme"       => add_reminder(&pool, &cmd, true).await,
+		"clearreminders" => clear_reminders(&pool, &cmd.sender.name).await,
+		"rmrm"           => clear_reminders(&pool, &cmd.sender.name).await,
+		_ => Ok(None),
+	};
+
+	let cmd_out = match cmd_out {
+		Ok(content) => content,
+		Err(e)      => {
+			println!("{e}");
+			Some("Error occured while processing, sorry PoroSad".into())
+		},
 	};
 
 	if let Some(output) = cmd_out {
@@ -31,8 +41,9 @@ pub async fn handle_command(
 	Ok(())
 }
 
-// \(xh,xm\) \[text\] 
 
+// parse the incoming duration identifying string
+// expected input: (xh,xm) 
 fn parse_duration_to_hm(s: &String) -> anyhow::Result<(i64, i64)> {
 	let hrs  = s[s.find('(').ok_or(MyError::NotFound)?+1..s.find('h').ok_or(MyError::NotFound)?].to_owned().parse()?;
 	let mins = s[s.find(',').ok_or(MyError::NotFound)?+1..s.find('m').ok_or(MyError::NotFound)?].to_owned().parse()?;
@@ -62,7 +73,7 @@ async fn add_reminder(
 
 	let start_idx = if is_for_self { 1 } else { 2 };
 	let message = match cmd.args.get(start_idx).ok_or(MyError::OutOfBounds) {
-		Ok(_) => cmd.args[2..].join(" "),
+		Ok(_) => cmd.args[start_idx..].join(" "),
 		Err(_) => return Ok(Some("No message provided.".into())),
 	};
 
@@ -80,12 +91,18 @@ async fn add_reminder(
 	Ok(Some("Reminder set successfully.".into()))
 }
 
-// async fn remove_reminder(
-// 	pool: &SqlitePool,
-// 	id: i32,
-// ) -> anyhow::Result<Option<String>> {
+async fn clear_reminders(
+	pool: &SqlitePool,
+	name: &str,
+) -> anyhow::Result<Option<String>> {
+	let delete_count = db::clear_users_sent_reminders(pool, name).await?;
 
-// }
+	if delete_count == 0 {
+		return Ok(Some("No reminders set, nothing happened".into()));
+	} else {
+		return Ok(Some(format!("Successfully cleared {delete_count} reminders")));
+	}
+}
 
 fn ping()
 -> anyhow::Result<Option<String>> {
