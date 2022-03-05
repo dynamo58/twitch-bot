@@ -1,1 +1,0 @@
-The word you tried to create a Markov chain from could not generate one, because it is not yet tracked in the database. Once it appears in the chat, it's gonna get indexed and actually will generate something. E1 

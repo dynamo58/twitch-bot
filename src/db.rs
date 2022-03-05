@@ -311,3 +311,33 @@ pub async fn insert_reminder(
     
     Ok(())
 }
+
+pub async fn get_explanation(
+	pool: &SqlitePool,
+	code: &str,
+) -> anyhow::Result<Option<String>> {
+	let mut conn = pool.acquire().await?;
+
+	let sql = r#"
+		SELECT
+			message
+			FROM
+				explanations
+			WHERE
+				code=?1;
+	"#;
+
+	let messages: Vec<String> = sqlx::query_as::<Sqlite, StringQR>(&sql)
+		.bind(code)
+		.fetch_all(&mut *conn)
+		.await?
+		.iter()
+		.map(|succ| succ.0.clone())
+		.collect();
+
+	if messages.len() == 0 {
+		return Ok(Some("No such error code".into()));
+	} else {
+		return Ok(Some(messages[0].clone()));
+	}
+}

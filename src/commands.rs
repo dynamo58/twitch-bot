@@ -1,8 +1,6 @@
 use crate::{CommandSource, MyError};
 use crate::db;
 
-use std::path::Path;
-
 use chrono::Duration;
 use sqlx::sqlite::SqlitePool;
 
@@ -17,7 +15,7 @@ pub async fn handle_command(
 	let cmd_out = match cmd.cmd.as_str() {
 		"ping"           => ping(),
 		"markov"         => markov(&pool, &cmd).await,
-		"explain"        => explain(&cmd.args[0]),
+		"explain"        => explain(&pool, &cmd.args[0]).await,
 		"echo"           => echo(&cmd.args),
 		"remind"         => add_reminder(&pool, &cmd, false).await,
 		"remindme"       => add_reminder(&pool, &cmd, true).await,
@@ -154,11 +152,13 @@ async fn markov(
 	Ok(Some(output.join(" ")))
 }
 
-fn explain (error_code: &str) -> anyhow::Result<Option<String>> {
-	let err_explanation = std::fs::read_to_string(Path::new(&format!("assets/explanations/{}.txt", error_code)));
+pub async fn explain (
+	pool: &SqlitePool,
+	error_code: &str,
+) -> anyhow::Result<Option<String>> {
 
-	match err_explanation {
-		Ok(expl) => return Ok(Some(expl)),
-		Err(_) => return Ok(Some("No such error code".into()))
+	match db::get_explanation(pool, error_code).await? {
+		Some(expl) => return Ok(Some(expl)),
+		None => return Ok(Some("No such explanation".into()))
 	}
 }
