@@ -1,12 +1,14 @@
 use crate::{CommandSource, MyError};
 use crate::db;
 
+use async_recursion::async_recursion;
 use chrono::Duration;
 use sqlx::sqlite::SqlitePool;
 
 type TwitchClient = twitch_irc::TwitchIRCClient<twitch_irc::transport::tcp::TCPTransport<twitch_irc::transport::tcp::TLS>, twitch_irc::login::StaticLoginCredentials>;
 
 // handle incoming commands
+#[async_recursion]
 pub async fn handle_command(
 	pool: &SqlitePool,
 	client: TwitchClient,
@@ -21,6 +23,9 @@ pub async fn handle_command(
 		"remindme"       => add_reminder(&pool, &cmd, true).await,
 		"clearreminders" => clear_reminders(&pool, &cmd.sender.name).await,
 		"rmrm"           => clear_reminders(&pool, &cmd.sender.name).await,
+		"setalias"       => set_alias(&pool, &cmd).await,
+		"rmalias"        => remove_alias(&pool, &cmd).await,
+		"$"              => execute_alias(&pool, client.clone(), &cmd).await,
 		_ => Ok(None),
 	};
 
@@ -39,6 +44,70 @@ pub async fn handle_command(
 	Ok(())
 }
 
+async fn set_alias(
+	pool: &SqlitePool,
+	cmd: &CommandSource,
+) -> anyhow::Result<Option<String>> {
+	let alias = match cmd.args.get(0) {
+		Some(a) => a,
+		None => return Ok(Some("Bad formatting - no alias found.".into()))
+	};
+
+	let alias_cmd = match cmd.args.get(1) {
+		Some(_) => cmd.args[1..].join(" "),
+		None => return Ok(Some("Bad formatting - no alias command provided.".into())),
+	};
+
+	db::set_alias(pool, &cmd.sender.name, &alias, &alias_cmd).await?;
+
+	Ok(Some("Alias successfully created.".into()))
+}
+
+async fn execute_alias(
+	pool: &SqlitePool,
+	client: TwitchClient,
+	cmd: &CommandSource,
+) -> anyhow::Result<Option<String>> {
+	let alias = match cmd.args.get(0).clone() {
+		Some(a) => a,
+		None => return Ok(Some("Bad formatting - missing alias name.".into())),
+	};
+	let owner = &cmd.sender.name;
+
+	let alias_cmd = match db::get_alias_cmd(pool, &owner, &alias).await? {
+		Some(alias) => alias
+			.split(' ')
+			.map(|a| a.clone().to_string())
+			.collect::<Vec<String>>(),
+		None => return Ok(Some("Alias not recognized.".into())),
+	};
+
+	let new_cmd = CommandSource {
+		cmd: match alias_cmd.get(0) {
+			Some(a) => a[1..].to_owned(),
+			None => return Ok(Some("Your alias is faulty.".into())),
+		},
+		args: match alias_cmd.get(1) {
+			Some(_) => alias_cmd[1..].into_iter().map(|x| x.clone().to_string()).collect::<Vec<String>>(),
+			None => vec![],
+		},
+		channel: cmd.channel.clone(),
+		sender: cmd.sender.clone(),
+		statuses: cmd.statuses.clone(),
+		timestamp: cmd.timestamp.clone(),
+	};
+
+	handle_command(pool, client, new_cmd).await?;
+
+	Ok(None)
+}
+
+async fn remove_alias(
+	pool: &SqlitePool,
+	cmd: &CommandSource,
+) -> anyhow::Result<Option<String>> {
+	todo!()
+}
 
 // parse the incoming duration identifying string
 // expected input: (xh,xm) 

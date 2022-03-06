@@ -3,12 +3,14 @@ mod db;
 
 use twitch_bot::{Config, CommandSource, MyError};
 use commands::handle_command;
-use sqlx::sqlite::SqlitePool;
-use dotenv::dotenv;
 
+use dotenv::dotenv;
+use sqlx::sqlite::SqlitePool;
+use tracing::{info, error, warn};
 use twitch_irc::login::StaticLoginCredentials;
 use twitch_irc::{ClientConfig, SecureTCPTransport, TwitchIRCClient};
 use twitch_irc::message::ServerMessage;
+
 
 const DB_PATH: &str = "sqlite:db.db";
 
@@ -16,12 +18,15 @@ const DB_PATH: &str = "sqlite:db.db";
 async fn main() -> anyhow::Result<()> {
 	// load environment variables from `.env` file
 	dotenv().ok();
+	// init tracing subscriber
+	// tracing_subscriber::fmt::init();
 
 	// instantiate running config from `config.json`
 	let config = match Config::from_config_file() {
 		Ok(conf) => conf,
 		Err(_) => panic!("Couldn't load config, aborting."),
 	};
+
 	// instantiate database connection pool
     let pool = SqlitePool::connect(DB_PATH)
 		.await
@@ -36,7 +41,7 @@ async fn main() -> anyhow::Result<()> {
 	for channel in &config.channels {
 		db::try_create_tables_for_channel(&pool, channel)
 			.await
-			.expect(&format!("Could not connect to channel {}, aborting", channel));
+			.expect(&format!("Could not create tables for channel \"{}\", aborting", channel));
 	}
 
 	let twitch_nick = std::env::var("TWITCH_NICK").expect("Twitch nick is missing in .env").clone();
@@ -55,6 +60,7 @@ async fn main() -> anyhow::Result<()> {
 	// join all channels in config
 	for channel in &config.channels {
 		client.join(channel.into());
+		info!("joined channel {channel}");
 	}
 
     let join_handle = tokio::spawn(async move {

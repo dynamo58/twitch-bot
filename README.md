@@ -4,16 +4,18 @@ A simple Twitch bot in Rust with quite specific features.
 
 # Commands
 
-| Command        | Args                             | Description          |
-| ---            | ---                              | ---                  |
-| ping           | None                             | responds with "pong" |
-| explain        | [error code: str]                | tries to respond with error in assets/explanations |
-| markov         | [start: str] [count: int]        | responds with a markov chain generated from saved chat messages |
-| echo           | \[text\]                         | repeats user's message |
-| remind         | \(xh,xm\) \[user: str\] \[text\] | remind a  user in a specified amount of time (whenever he types a messages after the specified duration has passed) |
-| remindme       | \(xh,xm\) \[text\]               | shortcut for reminding one's self |
-| clearreminders | None                             | clears all reminders the user has set (that are still pending)
-| rmrm           | None                             | alias for the `clearreminders` command 
+| Command              | Args                             | Description          |
+| ---                  | ---                              | ---                  |
+| ping                 | None                             | responds with "pong" |
+| explain              | [error code: str]                | tries to respond with error in assets/explanations |
+| markov               | [start: str] [count: int]        | responds with a markov chain generated from saved chat messages |
+| echo                 | \[text\]                         | repeats user's message |
+| remind               | \(xh,xm\) \[user: str\] \[text\] | remind a  user in a specified amount of time (whenever he types a messages after the specified duration has passed) |
+| remindme             | \(xh,xm\) \[text\]               | shortcut for reminding one's self |
+| clearreminders       | None                             | clears all reminders the user has set (that are still pending)
+| rmrm                 | None                             | alias for the `clearreminders` command 
+| setalias             | \[name: str\] \[cmd expression\] | set an alias for caller (like a substitue for specificied command) 
+| \[prefix\]\[prefix\] | \[alias name: str\]              | execute an alias
 
 # Get started
 

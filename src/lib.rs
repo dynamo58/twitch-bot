@@ -35,6 +35,7 @@ impl Config {
 	}
 }
 
+#[derive(Clone)]
 pub enum TwitchStatus {
 	Broadcaster,
 	Admin,
@@ -46,6 +47,7 @@ pub enum TwitchStatus {
 	Premium,
 }
 
+#[derive(Clone)]
 pub struct Sender {
 	pub id: String,
 	pub name: String,

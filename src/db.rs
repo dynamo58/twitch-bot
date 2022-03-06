@@ -341,3 +341,66 @@ pub async fn get_explanation(
 		return Ok(Some(messages[0].clone()));
 	}
 }
+
+// set an alias for the user
+pub async fn set_alias<'a>(
+    pool:      &SqlitePool,
+	owner:     &'a str,
+    alias:     &'a str,
+	alias_cmd: &'a str
+) -> anyhow::Result<()> {
+	let mut conn = pool.acquire().await?;
+
+	let sql = r#"
+        INSERT 
+            INTO user_aliases
+                (owner, alias, alias_cmd)
+            VALUES
+                (?1, ?2, ?3);
+    "#;
+
+	sqlx::query::<Sqlite>(&sql)
+		.bind(owner)
+		.bind(alias)
+		.bind(alias_cmd)
+		.execute(&mut *conn)
+		.await?;
+    
+    Ok(())
+}
+
+// insert a reminder for a user
+pub async fn get_alias_cmd(
+    pool:      &SqlitePool,
+	owner:     &str,
+    alias:     &str,
+) -> anyhow::Result<Option<String>> {
+	let mut conn = pool.acquire().await?;
+
+	let sql = r#"
+		SELECT
+			alias_cmd
+			FROM
+				user_aliases
+			WHERE
+				owner=?1
+			AND
+				alias=?2;
+	"#;
+
+	// length should be 1 || 0
+	let aliases: Vec<String> = sqlx::query_as::<Sqlite, StringQR>(&sql)
+		.bind(owner)
+		.bind(alias)
+		.fetch_all(&mut *conn)
+		.await?
+		.iter()
+		.map(|a| a.0.clone())
+		.collect();
+	
+	if aliases.len() == 0 {
+		return Ok(None);
+	} else {
+		return Ok(Some(aliases[0].to_owned()));
+	}
+}
