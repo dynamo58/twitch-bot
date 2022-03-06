@@ -33,7 +33,7 @@ pub async fn handle_command(
 		Ok(content) => content,
 		Err(e)      => {
 			println!("{e}");
-			Some("Error occured while processing, sorry PoroSad".into())
+			Some("error while processing, sorry PoroSad".into())
 		},
 	};
 
@@ -44,25 +44,27 @@ pub async fn handle_command(
 	Ok(())
 }
 
+// allows for user to add a new alias for themselves
 async fn set_alias(
 	pool: &SqlitePool,
 	cmd: &CommandSource,
 ) -> anyhow::Result<Option<String>> {
 	let alias = match cmd.args.get(0) {
 		Some(a) => a,
-		None => return Ok(Some("Bad formatting - no alias found.".into()))
+		None => return Ok(Some("❌ no alias name provided".into()))
 	};
 
 	let alias_cmd = match cmd.args.get(1) {
 		Some(_) => cmd.args[1..].join(" "),
-		None => return Ok(Some("Bad formatting - no alias command provided.".into())),
+		None => return Ok(Some("❌ no alias command provided".into())),
 	};
 
 	db::set_alias(pool, &cmd.sender.name, &alias, &alias_cmd).await?;
 
-	Ok(Some("Alias successfully created.".into()))
+	Ok(Some("✅ alias created".into()))
 }
 
+// run user's alias
 async fn execute_alias(
 	pool: &SqlitePool,
 	client: TwitchClient,
@@ -70,7 +72,7 @@ async fn execute_alias(
 ) -> anyhow::Result<Option<String>> {
 	let alias = match cmd.args.get(0).clone() {
 		Some(a) => a,
-		None => return Ok(Some("Bad formatting - missing alias name.".into())),
+		None => return Ok(Some("❌ missing alias name".into())),
 	};
 	let owner = &cmd.sender.name;
 
@@ -79,13 +81,13 @@ async fn execute_alias(
 			.split(' ')
 			.map(|a| a.clone().to_string())
 			.collect::<Vec<String>>(),
-		None => return Ok(Some("Alias not recognized.".into())),
+		None => return Ok(Some("❌ alias not recognized".into())),
 	};
 
 	let new_cmd = CommandSource {
 		cmd: match alias_cmd.get(0) {
 			Some(a) => a[1..].to_owned(),
-			None => return Ok(Some("Your alias is faulty.".into())),
+			None => return Ok(Some("❌ alias faulty".into())),
 		},
 		args: match alias_cmd.get(1) {
 			Some(_) => alias_cmd[1..].into_iter().map(|x| x.clone().to_string()).collect::<Vec<String>>(),
@@ -102,10 +104,22 @@ async fn execute_alias(
 	Ok(None)
 }
 
+// allows caller to remove an alias of theirs
 async fn remove_alias(
 	pool: &SqlitePool,
 	cmd: &CommandSource,
 ) -> anyhow::Result<Option<String>> {
+
+	let alias = match cmd.args.get(0) {
+		Some(a) => a.to_owned(),
+		None => return Ok(Some("❌ no alias provided".into()))
+	};
+
+	match db::remove_alias(pool, &cmd.sender.name, &alias).await? {
+		0 => return Ok(Some("❌ no such alias".into())),
+		_ => return Ok(Some("✅ alias removed".into())),
+	}
+
 	todo!()
 }
 
@@ -118,6 +132,7 @@ fn parse_duration_to_hm(s: &String) -> anyhow::Result<(i64, i64)> {
 	Ok((hrs, mins))
 } 
 
+// add a reminder for someone
 async fn add_reminder(
 	pool: &SqlitePool,
 	cmd: &CommandSource,
@@ -125,7 +140,7 @@ async fn add_reminder(
 ) -> anyhow::Result<Option<String>> {
 	let (h, m) = match parse_duration_to_hm(&cmd.args[0]) {
 		Ok(a) => a,
-		Err(_) => return Ok(Some("Bad time formatting.".into()))
+		Err(_) => return Ok(Some("❌ bad time formatting".into()))
 	};
 
 	let remind_time = cmd.timestamp + Duration::hours(h) + Duration::minutes(m);
@@ -134,14 +149,14 @@ async fn add_reminder(
 		true => &cmd.sender.name,
 		false => match cmd.args.get(1).ok_or(MyError::OutOfBounds) {
 			Ok(a) => a,
-			Err(_) => return Ok(Some("No name provided.".into())),
+			Err(_) => return Ok(Some("❌ no name provided".into())),
 		}
 	};
 
 	let start_idx = if is_for_self { 1 } else { 2 };
 	let message = match cmd.args.get(start_idx).ok_or(MyError::OutOfBounds) {
 		Ok(_) => cmd.args[start_idx..].join(" "),
-		Err(_) => return Ok(Some("No message provided.".into())),
+		Err(_) => return Ok(Some("❌ no message provided".into())),
 	};
 
 	let reminder = db::Reminder {
@@ -155,9 +170,10 @@ async fn add_reminder(
 
 	db::insert_reminder(pool, &reminder).await?;
 
-	Ok(Some("Reminder set successfully.".into()))
+	Ok(Some("✅ set successfully.".into()))
 }
 
+// clears reminders user has sent out
 async fn clear_reminders(
 	pool: &SqlitePool,
 	name: &str,
@@ -165,17 +181,19 @@ async fn clear_reminders(
 	let delete_count = db::clear_users_sent_reminders(pool, name).await?;
 
 	if delete_count == 0 {
-		return Ok(Some("No reminders set, nothing happened".into()));
+		return Ok(Some("❌ no reminders set, nothing happened".into()));
 	} else {
-		return Ok(Some(format!("Successfully cleared {delete_count} reminders")));
+		return Ok(Some(format!("✅ cleared {delete_count} reminders")));
 	}
 }
 
+// ping -> pong
 fn ping()
 -> anyhow::Result<Option<String>> {
 	Ok(Some("pong".into()))
 }
 
+// say whatever caller said
 fn echo(args: &Vec<String>)
 -> anyhow::Result<Option<String>> {
 	Ok(Some(args.join(" ")))
@@ -189,14 +207,14 @@ async fn markov(
 	let rounds: usize;
 	match cmd.args.len() {
 		// if no arguments are supplied, return immediately
-		0 => return Ok(Some("Insufficient args".into())),
+		0 => return Ok(Some("❌ insufficient args".into())),
 		// if number of rounds isn't set, set to default
 		1 => {rounds = 7},
 		// else parse both arguments
 		_ => 
 			match cmd.args[1].parse::<usize>() {
 				Ok(num) => {rounds = num},
-				Err(_)  => return Ok(Some("Invalid length argument, use a positive integer.".into())),
+				Err(_)  => return Ok(Some("❌ invalid length argument, use a positive integer".into())),
 		}
 	}
 
@@ -221,6 +239,7 @@ async fn markov(
 	Ok(Some(output.join(" ")))
 }
 
+// show additional information about a spec. error
 pub async fn explain (
 	pool: &SqlitePool,
 	error_code: &str,
@@ -228,6 +247,6 @@ pub async fn explain (
 
 	match db::get_explanation(pool, error_code).await? {
 		Some(expl) => return Ok(Some(expl)),
-		None => return Ok(Some("No such explanation".into()))
+		None => return Ok(Some("❌ no such explanation".into()))
 	}
 }

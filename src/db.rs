@@ -404,3 +404,31 @@ pub async fn get_alias_cmd(
 		return Ok(Some(aliases[0].to_owned()));
 	}
 }
+
+// remove a specified alias
+pub async fn remove_alias<'a>(
+	pool: &SqlitePool,
+	name: &'a str,
+	alias: &'a str
+) -> anyhow::Result<i32> {
+	let mut conn = pool.acquire().await?;
+
+	let sql = r#"
+		DELETE
+			FROM user_aliases
+			WHERE
+				owner=?1
+			AND
+				alias=?2;
+		SELECT changes();
+	"#;
+			
+	let num_affected: i32 = sqlx::query_as::<Sqlite, I32QR>(&sql)
+		.bind(name)
+		.bind(alias)
+		.fetch_all(&mut *conn)
+		.await?
+		[0].0;
+
+	Ok(num_affected)
+}

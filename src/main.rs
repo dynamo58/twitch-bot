@@ -6,7 +6,7 @@ use commands::handle_command;
 
 use dotenv::dotenv;
 use sqlx::sqlite::SqlitePool;
-use tracing::{info, error, warn};
+use tracing::{info, /* error, warn */};
 use twitch_irc::login::StaticLoginCredentials;
 use twitch_irc::{ClientConfig, SecureTCPTransport, TwitchIRCClient};
 use twitch_irc::message::ServerMessage;
