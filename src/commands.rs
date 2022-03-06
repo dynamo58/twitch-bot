@@ -25,6 +25,7 @@ pub async fn handle_command(
 		"rmrm"           => clear_reminders(&pool, &cmd.sender.name).await,
 		"setalias"       => set_alias(&pool, &cmd).await,
 		"rmalias"        => remove_alias(&pool, &cmd).await,
+		"first"          => first_message(&pool, &cmd).await,
 		"$"              => execute_alias(&pool, client.clone(), &cmd).await,
 		_ => Ok(None),
 	};
@@ -248,5 +249,27 @@ pub async fn explain (
 	match db::get_explanation(pool, error_code).await? {
 		Some(expl) => return Ok(Some(expl)),
 		None => return Ok(Some("❌ no such explanation".into()))
+	}
+}
+
+pub async fn first_message(
+	pool: &SqlitePool,
+	cmd:  &CommandSource,
+) -> anyhow::Result<Option<String>> {
+	let sender_id = match &cmd.args.get(0) {
+		Some(id) => todo!(),
+		None => cmd.sender.id.parse::<i32>().unwrap(),
+	};
+
+	let channel = match &cmd.args.get(1) {
+		Some(c) => c.clone(),
+		None =>    &cmd.channel,
+	};
+
+	let message = db::get_first_message(pool, sender_id, channel).await?;
+
+	match message {
+		Some(msg) => return Ok(Some(msg)),
+		None => return Ok(Some("❌ no message found (commands not logged)".into())),
 	}
 }

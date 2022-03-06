@@ -432,3 +432,33 @@ pub async fn remove_alias<'a>(
 
 	Ok(num_affected)
 }
+
+pub async fn get_first_message(
+	pool:      &SqlitePool,
+	sender_id: i32,
+	channel:   &str
+) -> anyhow::Result<Option<String>> {
+	let mut conn = pool.acquire().await?;
+
+	let sql = r#"
+		SELECT message
+			FROM {{ CHANNEL_NAME }}
+			WHERE
+				sender_id=$1
+			LIMIT 1;
+	"#.replace("{{ CHANNEL_NAME }}", channel);
+
+	let messages: Vec<String> = sqlx::query_as::<Sqlite, StringQR>(&sql)
+		.bind(sender_id)
+		.fetch_all(&mut *conn)
+		.await?
+		.iter()
+		.map(|succ| succ.0.clone())
+		.collect();
+	
+	if messages.len() < 1 {
+		return Ok(None);
+	} else {
+		return Ok(Some(messages[0].clone()));
+	}
+}
