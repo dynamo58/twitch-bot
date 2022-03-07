@@ -462,3 +462,31 @@ pub async fn get_first_message(
 		return Ok(Some(messages[0].clone()));
 	}
 }
+
+pub async fn save_suggestion(
+	pool: &SqlitePool,
+	sender_id: i32,
+	sender_name: &str,
+	text: &str,
+	dt: DateTime<Utc>,
+) -> anyhow::Result<()> {
+	let mut conn = pool.acquire().await?;
+
+	let sql = r#"
+        INSERT 
+            INTO user_feedback
+                (sender_id, sender_name, message, time)
+            VALUES
+                (?1, ?2, ?3, ?4);
+    "#;
+
+	sqlx::query::<Sqlite>(&sql)
+		.bind(sender_id)
+		.bind(sender_name)
+		.bind(text)
+		.bind(dt.format("%Y-%m-%d %H:%M:%S").to_string())
+		.execute(&mut *conn)
+		.await?;
+
+    Ok(())
+}

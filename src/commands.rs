@@ -2,7 +2,7 @@ use crate::{CommandSource, MyError};
 use crate::db;
 
 use async_recursion::async_recursion;
-use chrono::Duration;
+use chrono::{Duration, Utc};
 use sqlx::sqlite::SqlitePool;
 
 type TwitchClient = twitch_irc::TwitchIRCClient<twitch_irc::transport::tcp::TCPTransport<twitch_irc::transport::tcp::TLS>, twitch_irc::login::StaticLoginCredentials>;
@@ -16,16 +16,17 @@ pub async fn handle_command(
 ) -> anyhow::Result<()> {
 	let cmd_out = match cmd.cmd.as_str() {
 		"ping"           => ping(),
-		"markov"         => markov(&pool, &cmd).await,
-		"explain"        => explain(&pool, &cmd.args[0]).await,
 		"echo"           => echo(&cmd.args),
-		"remind"         => add_reminder(&pool, &cmd, false).await,
-		"remindme"       => add_reminder(&pool, &cmd, true).await,
-		"clearreminders" => clear_reminders(&pool, &cmd.sender.name).await,
-		"rmrm"           => clear_reminders(&pool, &cmd.sender.name).await,
+		"markov"         => markov(&pool, &cmd).await,
+		"suggest"        => suggest(&pool, &cmd).await,
 		"setalias"       => set_alias(&pool, &cmd).await,
 		"rmalias"        => remove_alias(&pool, &cmd).await,
 		"first"          => first_message(&pool, &cmd).await,
+		"explain"        => explain(&pool, &cmd.args[0]).await,
+		"remindme"       => add_reminder(&pool, &cmd, true).await,
+		"remind"         => add_reminder(&pool, &cmd, false).await,
+		"clearreminders" => clear_reminders(&pool, &cmd.sender.name).await,
+		"rmrm"           => clear_reminders(&pool, &cmd.sender.name).await,
 		"$"              => execute_alias(&pool, client.clone(), &cmd).await,
 		_ => Ok(None),
 	};
@@ -272,4 +273,20 @@ pub async fn first_message(
 		Some(msg) => return Ok(Some(msg)),
 		None => return Ok(Some("❌ no message found (commands not logged)".into())),
 	}
+}
+
+pub async fn suggest(
+	pool: &SqlitePool,
+	cmd: &CommandSource,
+) -> anyhow::Result<Option<String>> {
+	let text = match &cmd.args.get(0) {
+		Some(_) => cmd.args.join(" "),
+		None => return Ok(Some("❌ insufficient args".into())),
+	};
+
+	let sender_id = cmd.sender.id.parse::<i32>().unwrap();
+
+	db::save_suggestion(pool, sender_id, &cmd.sender.name, &text, Utc::now()).await?;
+
+	Ok(Some("✅ suggestion saved".into()))
 }
