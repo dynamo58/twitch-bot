@@ -17,8 +17,8 @@ struct I32QR(i32);
 #[derive(sqlx::FromRow, Debug)]
 pub struct Reminder {
 	pub id: i32,
-    pub from_user_name: String,
-    pub for_user_name: String,
+    pub from_user_id: i32,
+    pub for_user_id: i32,
     pub raise_timestamp: DateTime<Utc>,
     pub message: String
 }
@@ -78,6 +78,7 @@ pub async fn log(
 	sqlx::query::<Sqlite>(&sql)
 		.bind(&privmsg.sender.id)
 		.bind(&privmsg.sender.name)
+		// TODO: this is utterly fucking retarded
 		.bind(&privmsg.badges.iter().map(|badge| format!("{}_", badge.name)).collect::<String>())
 		.bind(&format!("{}", &privmsg.server_timestamp))
 		.bind(&privmsg.message_text)
@@ -96,6 +97,7 @@ pub async fn log_markov(
 
 	let words = privmsg.message_text.split(' ').collect::<Vec<&str>>();
 
+	// process each word (besides the last one)
 	for idx in 0..words.len()-1 {
 		let word = match format_markov_entry(words[idx]) {
 			Ok(a) => a,
@@ -129,7 +131,7 @@ pub async fn log_markov(
 // checks for reminders of a specified user, return & delete them
 pub async fn check_for_reminders(
 	pool: &SqlitePool,
-	name: &str,
+	user_id: i32,
 ) -> anyhow::Result<Option<Vec<Reminder>>> {
 	let mut conn = pool.acquire().await?;
 
@@ -138,12 +140,12 @@ pub async fn check_for_reminders(
 		SELECT *
 			FROM user_reminders
 			WHERE
-				for_user_name=?1
+				for_user_id=?1
 			AND raise_timestamp <= DATETIME('NOW');
 	"#;
 
 	let reminders: Vec<Reminder> = sqlx::query_as::<Sqlite, Reminder>(&sql)
-		.bind(&name)
+		.bind(user_id)
 		.fetch_all(&mut *conn)
 		.await?;
 
@@ -241,7 +243,7 @@ pub async fn clear_users_sent_reminders(
 		DELETE
 			FROM user_reminders
 			WHERE
-				from_user_name=$1;
+				from_user_id=$1;
 		SELECT changes();
 	"#;
 
@@ -296,15 +298,22 @@ pub async fn insert_reminder(
     let sql = r#"
         INSERT 
             INTO user_reminders 
-                (from_user_name, for_user_name, raise_timestamp, message)
+                (from_user_id, for_user_id, raise_timestamp, message)
             VALUES
                 (?1, ?2, ?3, ?4);
     "#;
 
 	sqlx::query::<Sqlite>(&sql)
-		.bind(&reminder.from_user_name)
-		.bind(&reminder.for_user_name)
-		.bind(&format!("{}", reminder.raise_timestamp.format("%Y-%m-%d %H:%M:%S").to_string()))
+		.bind(reminder.from_user_id)
+		.bind(reminder.for_user_id)
+		.bind(
+			&format!(
+				"{}",
+				reminder.raise_timestamp
+					.format("%Y-%m-%d %H:%M:%S")
+					.to_string()
+			)
+		)
 		.bind(&reminder.message)
 		.execute(&mut *conn)
 		.await?;

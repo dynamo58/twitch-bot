@@ -1,5 +1,6 @@
 use crate::{CommandSource, MyError};
 use crate::db;
+use crate::twitch_api;
 
 use async_recursion::async_recursion;
 use chrono::{Duration, Utc};
@@ -25,8 +26,8 @@ pub async fn handle_command(
 		"explain"        => explain(&pool, &cmd.args[0]).await,
 		"remindme"       => add_reminder(&pool, &cmd, true).await,
 		"remind"         => add_reminder(&pool, &cmd, false).await,
-		"clearreminders" => clear_reminders(&pool, &cmd.sender.name).await,
-		"rmrm"           => clear_reminders(&pool, &cmd.sender.name).await,
+		"clearreminders" => clear_reminders(&pool, cmd.sender.id).await,
+		"rmrm"           => clear_reminders(&pool, cmd.sender.id).await,
 		"$"              => execute_alias(&pool, client.clone(), &cmd).await,
 		_ => Ok(None),
 	};
@@ -164,8 +165,9 @@ async fn add_reminder(
 	let reminder = db::Reminder {
 		// dummy
 		id: 0,
-		from_user_name: cmd.sender.name.clone(),
-		for_user_name: to_user_name.clone(),
+		from_user_id: cmd.sender.id,
+		// TODO: translate name to id
+		for_user_id: todo!(),
 		raise_timestamp: remind_time,
 		message: message,
 	};
@@ -178,9 +180,9 @@ async fn add_reminder(
 // clears reminders user has sent out
 async fn clear_reminders(
 	pool: &SqlitePool,
-	name: &str,
+	user_id: i32,
 ) -> anyhow::Result<Option<String>> {
-	let delete_count = db::clear_users_sent_reminders(pool, name).await?;
+	let delete_count = db::clear_users_sent_reminders(pool, user_id).await?;
 
 	if delete_count == 0 {
 		return Ok(Some("❌ no reminders set, nothing happened".into()));
@@ -216,7 +218,7 @@ async fn markov(
 		_ => 
 			match cmd.args[1].parse::<usize>() {
 				Ok(num) => {rounds = num},
-				Err(_)  => return Ok(Some("❌ invalid length argument, use a positive integer".into())),
+				Err(_)  => return Ok(Some("❌ expected positive integer".into())),
 		}
 	}
 
@@ -235,7 +237,7 @@ async fn markov(
 	}
 
 	if output.len() == 1 {
-		return Ok(Some("That word has not been indexed yet | E1".into()));
+		return Ok(Some("❌ word not indexed yet | E1".into()));
 	}
 
 	Ok(Some(output.join(" ")))
@@ -253,13 +255,14 @@ pub async fn explain (
 	}
 }
 
+// returns the first message of user
 pub async fn first_message(
 	pool: &SqlitePool,
 	cmd:  &CommandSource,
 ) -> anyhow::Result<Option<String>> {
 	let sender_id = match &cmd.args.get(0) {
-		Some(id) => todo!(),
-		None => cmd.sender.id.parse::<i32>().unwrap(),
+		Some(name) => twitch_api::id_from_nick(),
+		None => cmd.sender.id,
 	};
 
 	let channel = match &cmd.args.get(1) {
@@ -271,7 +274,7 @@ pub async fn first_message(
 
 	match message {
 		Some(msg) => return Ok(Some(msg)),
-		None => return Ok(Some("❌ no message found (commands not logged)".into())),
+		None => return Ok(Some("❌ nothing found | E2".into())),
 	}
 }
 
@@ -281,7 +284,7 @@ pub async fn suggest(
 ) -> anyhow::Result<Option<String>> {
 	let text = match &cmd.args.get(0) {
 		Some(_) => cmd.args.join(" "),
-		None => return Ok(Some("❌ insufficient args".into())),
+		None => return Ok(Some("❌ no message".into())),
 	};
 
 	let sender_id = cmd.sender.id.parse::<i32>().unwrap();

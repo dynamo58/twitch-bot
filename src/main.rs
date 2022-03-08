@@ -1,5 +1,6 @@
 mod commands;
 mod db;
+mod twitch_api;
 
 use twitch_bot::{Config, CommandSource, MyError};
 use commands::handle_command;
@@ -21,11 +22,8 @@ async fn main() -> anyhow::Result<()> {
 	// init tracing subscriber
 	// tracing_subscriber::fmt::init();
 
-	// instantiate running config from `config.json`
-	let config = match Config::from_config_file() {
-		Ok(conf) => conf,
-		Err(_) => panic!("Couldn't load config, aborting."),
-	};
+	let config = Config::new()
+		.expect("Couldn't load config, aborting.");
 
 	// instantiate database connection pool
     let pool = SqlitePool::connect(DB_PATH)
@@ -82,7 +80,11 @@ async fn main() -> anyhow::Result<()> {
 				};
 
 				// check if user has any reminders set for him
-				let reminders = db::check_for_reminders(&pool, &privmsg.sender.login).await.unwrap();
+				let reminders = 
+					db::check_for_reminders(
+						&pool,
+						&privmsg.sender.id.parse::<i32>().unwrap
+					).await.unwrap();
 
 				if let Some(rs) = reminders {
 					for r in &rs {
