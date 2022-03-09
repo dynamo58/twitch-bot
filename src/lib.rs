@@ -1,6 +1,7 @@
 pub mod commands;
 pub mod db;
 pub mod twitch_api;
+pub mod twitch_api_models;
 
 use std::collections::HashMap;
 use std::path::Path;

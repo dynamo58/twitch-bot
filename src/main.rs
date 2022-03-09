@@ -1,6 +1,7 @@
 mod commands;
 mod db;
 mod twitch_api;
+mod twitch_api_models;
 
 use twitch_bot::{Config, CommandSource, MyError, TwitchAuth};
 use commands::handle_command;

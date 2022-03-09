@@ -1,38 +1,7 @@
 use crate::TwitchAuth;
+use crate::twitch_api_models as models;
 
 use reqwest::Client;
-use serde::{Deserialize};
-
-
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct UsersResponse {
-    pub data: Vec<UsersResponseData>,
-}
-
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct UsersResponseData {
-    pub id: String,
-    pub login: String,
-    #[serde(rename = "display_name")]
-    pub display_name: String,
-    #[serde(rename = "type")]
-    pub type_field: String,
-    #[serde(rename = "broadcaster_type")]
-    pub broadcaster_type: String,
-    pub description: String,
-    #[serde(rename = "profile_image_url")]
-    pub profile_image_url: String,
-    #[serde(rename = "offline_image_url")]
-    pub offline_image_url: String,
-    #[serde(rename = "view_count")]
-    pub view_count: i64,
-    // this is missing for some reason?
-    // pub email: String,
-    #[serde(rename = "created_at")]
-    pub created_at: String,
-}
 
 // translates users nickname to id
 // ref: https://dev.twitch.tv/docs/api/reference#get-users
@@ -51,7 +20,7 @@ pub async fn id_from_nick(
         .text()
         .await?;
 
-    let parsed: UsersResponse = serde_json::from_str(&res)?;
+    let parsed: models::UsersResponse = serde_json::from_str(&res)?;
 
     match parsed.data.get(0) {
         Some(data) => return Ok(Some(data.id.parse::<i32>().unwrap())),
@@ -76,8 +45,38 @@ pub async fn nick_from_id(
         .text()
         .await?;
 
-    let parsed: UsersResponse = serde_json::from_str(&res)?;
+    let parsed: models::UsersResponse = serde_json::from_str(&res)?;
     let nick = &parsed.data[0].login;
 
     Ok(nick.to_owned())
+}
+
+// gets all viewers present in a twitch stream
+pub async fn get_chatters(
+    channel_name: &str,
+) -> anyhow::Result<Option<Vec<String>>> {
+    let client = Client::new();
+
+    let res = client
+        .get(&format!("https://tmi.twitch.tv/group/user/{channel_name}/chatters"))
+        .send()
+        .await?
+        .text()
+        .await?;
+
+    let mut parsed: models::ChattersResponse = serde_json::from_str(&res)?;
+    let mut chatters = vec![];
+    
+    chatters.append(&mut parsed.chatters.broadcaster);
+    chatters.append(&mut parsed.chatters.vips);
+    chatters.append(&mut parsed.chatters.moderators);
+    chatters.append(&mut parsed.chatters.staff);
+    chatters.append(&mut parsed.chatters.admins);
+    chatters.append(&mut parsed.chatters.global_mods);
+    chatters.append(&mut parsed.chatters.viewers);
+
+    match chatters.len() {
+        0 => return Ok(None),
+        _ => return Ok(Some(chatters)),
+    }
 }

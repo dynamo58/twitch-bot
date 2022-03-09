@@ -4,7 +4,9 @@ use crate::twitch_api;
 
 use async_recursion::async_recursion;
 use chrono::{Duration, Utc};
+use rand::{self, Rng};
 use sqlx::sqlite::SqlitePool;
+
 
 type TwitchClient = twitch_irc::TwitchIRCClient<twitch_irc::transport::tcp::TCPTransport<twitch_irc::transport::tcp::TLS>, twitch_irc::login::StaticLoginCredentials>;
 
@@ -31,6 +33,7 @@ pub async fn handle_command(
 		"clearreminders" => clear_reminders(&pool, cmd.sender.id).await,
 		"rmrm"           => clear_reminders(&pool, cmd.sender.id).await,
 		"$"              => execute_alias(&pool, client.clone(), &auth, &cmd).await,
+		"rose"           => tag_rand_chatter_with_rose(&cmd.channel).await,
 		_ => Ok(None),
 	};
 
@@ -305,4 +308,17 @@ pub async fn suggest(
 	).await?;
 
 	Ok(Some("✅ suggestion saved".into()))
+}
+
+pub async fn tag_rand_chatter_with_rose(
+	channel_name: &str,
+) -> anyhow::Result<Option<String>> {
+	let chatters = match twitch_api::get_chatters(channel_name).await? {
+		Some(chatters) => chatters,
+		None => return Ok(Some("❌ no users in the chatroom".into())),
+	};
+
+	let rand_chatter = chatters[rand::thread_rng().gen_range(0..chatters.len())].clone();
+
+	Ok(Some(format!("@{rand_chatter} PeepoGlad 🌹")))
 }

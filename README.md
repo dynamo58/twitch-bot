@@ -18,7 +18,8 @@ A simple Twitch bot in Rust with quite specific features.
 | setalias       | [name: str] [cmd expression]         | set an alias for caller (like a substitue for specificied command) |
 | \[prefix\]     | \[alias name: str\]                  | execute an alias |
 | rmalias        | \[alias name: str\]                  | remove an alias |
-| first          | [nick: opt(str)] [channel: opt(str)] | get the first logged message of a user (in any channel)
+| first          | [nick: opt(str)] [channel: opt(str)] | get the first logged message of a user (in any channel) |
+| rose           | None                                 | send a rose to a random fellow chatter!
 
 # Get started
 
