@@ -10,6 +10,7 @@ A simple Twitch bot in Rust with quite specific features.
 | explain        | [error code: str]                    | tries to respond with error in assets/explanations |
 | markov         | [start: str] [count: int]            | responds with a markov chain generated from saved chat messages |
 | echo           | \[text\]                             | repeats user's message |
+| say            | \[text\]                             | alias for `echo` |
 | remind         | (xh,xm) [user: str] [text]           | remind user in a spec. amount of time (when he types a messages after the duration has passed) |
 | remindme       | \(xh,xm\) \[text\]                   | shortcut for reminding one's self |
 | clearreminders | None                                 | clears all reminders the user has set (that are still pending) |
@@ -18,7 +19,6 @@ A simple Twitch bot in Rust with quite specific features.
 | \[prefix\]     | \[alias name: str\]                  | execute an alias |
 | rmalias        | \[alias name: str\]                  | remove an alias |
 | first          | [nick: opt(str)] [channel: opt(str)] | get the first logged message of a user (in any channel)
-
 
 # Get started
 

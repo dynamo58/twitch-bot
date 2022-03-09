@@ -235,7 +235,7 @@ fn format_markov_entry(s: &str)
 
 pub async fn clear_users_sent_reminders(
 	pool: &SqlitePool,
-	user_name: &str,
+	user_id: i32,
 ) -> anyhow::Result<i32> {
 	let mut conn = pool.acquire().await?;
 
@@ -248,7 +248,7 @@ pub async fn clear_users_sent_reminders(
 	"#;
 
 	let num_affected: i32 = sqlx::query_as::<Sqlite, I32QR>(&sql)
-		.bind(user_name)
+		.bind(user_id)
 		.fetch_all(&mut *conn)
 		.await?
 		[0].0;
@@ -345,7 +345,7 @@ pub async fn get_explanation(
 		.collect();
 
 	if messages.len() == 0 {
-		return Ok(Some("No such error code".into()));
+		return Ok(Some("no such error code".into()));
 	} else {
 		return Ok(Some(messages[0].clone()));
 	}
@@ -354,7 +354,7 @@ pub async fn get_explanation(
 // set an alias for the user
 pub async fn set_alias<'a>(
     pool:      &SqlitePool,
-	owner:     &'a str,
+	owner_id:  i32,
     alias:     &'a str,
 	alias_cmd: &'a str
 ) -> anyhow::Result<()> {
@@ -363,13 +363,13 @@ pub async fn set_alias<'a>(
 	let sql = r#"
         INSERT 
             INTO user_aliases
-                (owner, alias, alias_cmd)
+                (owner_id, alias, alias_cmd)
             VALUES
                 (?1, ?2, ?3);
     "#;
 
 	sqlx::query::<Sqlite>(&sql)
-		.bind(owner)
+		.bind(owner_id)
 		.bind(alias)
 		.bind(alias_cmd)
 		.execute(&mut *conn)
@@ -380,9 +380,9 @@ pub async fn set_alias<'a>(
 
 // insert a reminder for a user
 pub async fn get_alias_cmd(
-    pool:      &SqlitePool,
-	owner:     &str,
-    alias:     &str,
+    pool:     &SqlitePool,
+	owner_id: i32,
+    alias:    &str,
 ) -> anyhow::Result<Option<String>> {
 	let mut conn = pool.acquire().await?;
 
@@ -392,14 +392,14 @@ pub async fn get_alias_cmd(
 			FROM
 				user_aliases
 			WHERE
-				owner=?1
+				owner_id=?1
 			AND
 				alias=?2;
 	"#;
 
 	// length should be 1 || 0
 	let aliases: Vec<String> = sqlx::query_as::<Sqlite, StringQR>(&sql)
-		.bind(owner)
+		.bind(owner_id)
 		.bind(alias)
 		.fetch_all(&mut *conn)
 		.await?
@@ -417,7 +417,7 @@ pub async fn get_alias_cmd(
 // remove a specified alias
 pub async fn remove_alias<'a>(
 	pool: &SqlitePool,
-	name: &'a str,
+	owner_id: i32,
 	alias: &'a str
 ) -> anyhow::Result<i32> {
 	let mut conn = pool.acquire().await?;
@@ -426,14 +426,14 @@ pub async fn remove_alias<'a>(
 		DELETE
 			FROM user_aliases
 			WHERE
-				owner=?1
+				owner_id=?1
 			AND
 				alias=?2;
 		SELECT changes();
 	"#;
-			
+
 	let num_affected: i32 = sqlx::query_as::<Sqlite, I32QR>(&sql)
-		.bind(name)
+		.bind(owner_id)
 		.bind(alias)
 		.fetch_all(&mut *conn)
 		.await?

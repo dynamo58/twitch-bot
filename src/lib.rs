@@ -1,5 +1,6 @@
 pub mod commands;
 pub mod db;
+pub mod twitch_api;
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -18,53 +19,43 @@ pub enum MyError {
 }
 
 // twitch authentification credentials
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TwitchAuth {
 	pub client_id: String,
-	pub auth: String,
-	pub twitch_nick: String,
+	pub oauth: String,
+	pub nick: String,
+}
+
+impl TwitchAuth {
+	pub fn from_dotenv() -> anyhow::Result<TwitchAuth> {
+		let oauth = std::env::var("TWITCH_OAUTH")?;
+		let client_id = std::env::var("TWITCH_CLIENT_ID")?;
+		let nick = std::env::var("TWITCH_NICK")?;
+
+		Ok(TwitchAuth { client_id, oauth, nick })
+	}
 }
 
 // config that directs how the bot works
 // gets set up during runtime
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Config {
 	pub channels: Vec<String>,
 	pub disregarded_users: Vec<String>,
 	pub prefix: char,
 	pub index_markov: bool,
-	pub auth: TwitchAuth,
 }
 
 impl Config {
 	// parse from config file at `assets/config.json`
-	pub fn new() -> anyhow::Result<Config> {
+	pub fn from_config_file() -> anyhow::Result<Config> {
 		let json: String = std::fs::read_to_string(Path::new("assets/config.json"))?;
-
-		let oauth = std::env::var("TWITCH_OAUTH")
-			.expect("Twitch OAuth is missing in .env");
-		let client_id = std::env::var("TWITCH_CLIENT_ID")
-			.expect("Twitch Client-ID is missing in .env");
-		let twitch_nick = std::env::var("TWITCH_NICK")
-			.expect("Twitch nick is missing in .env").clone();
 		
-		
-		let json = format!(
-			"{},
-			\"auth\": {{
-				\"client_id\": \"{client_id}\",
-				\"oauth\": \"Bearer: {oauth}\",
-				\"twitch_nick\": \"{twitch_nick}\"
-			}} }}", &json[..json.len()-2]
-		)
-
 		let mut config: Config = serde_json::from_str(&json)?;
 
 		config.disregarded_users = config.disregarded_users.iter().map(|user| user.to_lowercase()).collect(); 
 
 		Ok(config)
-	
-	
 	}
 }
 
@@ -113,14 +104,14 @@ impl CommandSource {
 
 		// parse badges
 		let badges: Vec<TwitchStatus> = privmsg.badges.into_iter().map(|badge| match badge.name.as_str() {
-			"admin" => TwitchStatus::Admin,
+			"admin"       => TwitchStatus::Admin,
 			"broadcaster" => TwitchStatus::Broadcaster,
-			"global_mod" => TwitchStatus::GlobalMod,
-			"moderator" => TwitchStatus::Mod,
-			"staff" => TwitchStatus::Staff,
-			"subscriber" => TwitchStatus::Subscriber,
-			"vip" => TwitchStatus::Vip,
-			"premium" => TwitchStatus::Premium,
+			"global_mod"  => TwitchStatus::GlobalMod,
+			"moderator"   => TwitchStatus::Mod,
+			"staff"       => TwitchStatus::Staff,
+			"subscriber"  => TwitchStatus::Subscriber,
+			"vip"         => TwitchStatus::Vip,
+			"premium"     => TwitchStatus::Premium,
 			_ => {println!("{}", badge.name); unreachable!()}
 		})
 		.collect();
@@ -136,4 +127,4 @@ impl CommandSource {
 	}
 }
 
-type UserNameIdCache: HashMap<String, i32> = HashMap::new();
+pub type NameIdCache = HashMap<String, i32>;

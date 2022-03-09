@@ -1,4 +1,4 @@
-use crate::{CommandSource, MyError};
+use crate::{CommandSource, MyError, TwitchAuth};
 use crate::db;
 use crate::twitch_api;
 
@@ -13,22 +13,24 @@ type TwitchClient = twitch_irc::TwitchIRCClient<twitch_irc::transport::tcp::TCPT
 pub async fn handle_command(
 	pool: &SqlitePool,
 	client: TwitchClient,
-	cmd: CommandSource
+	auth: &TwitchAuth,
+	cmd: CommandSource,
 ) -> anyhow::Result<()> {
 	let cmd_out = match cmd.cmd.as_str() {
 		"ping"           => ping(),
 		"echo"           => echo(&cmd.args),
+		"say"            => echo(&cmd.args),
 		"markov"         => markov(&pool, &cmd).await,
 		"suggest"        => suggest(&pool, &cmd).await,
 		"setalias"       => set_alias(&pool, &cmd).await,
 		"rmalias"        => remove_alias(&pool, &cmd).await,
-		"first"          => first_message(&pool, &cmd).await,
+		"first"          => first_message(&pool, &auth, &cmd).await,
 		"explain"        => explain(&pool, &cmd.args[0]).await,
-		"remindme"       => add_reminder(&pool, &cmd, true).await,
-		"remind"         => add_reminder(&pool, &cmd, false).await,
+		"remindme"       => add_reminder(&pool, &auth, &cmd, true).await,
+		"remind"         => add_reminder(&pool, &auth, &cmd, false).await,
 		"clearreminders" => clear_reminders(&pool, cmd.sender.id).await,
 		"rmrm"           => clear_reminders(&pool, cmd.sender.id).await,
-		"$"              => execute_alias(&pool, client.clone(), &cmd).await,
+		"$"              => execute_alias(&pool, client.clone(), &auth, &cmd).await,
 		_ => Ok(None),
 	};
 
@@ -52,8 +54,8 @@ async fn set_alias(
 	pool: &SqlitePool,
 	cmd: &CommandSource,
 ) -> anyhow::Result<Option<String>> {
-	let alias = match cmd.args.get(0) {
-		Some(a) => a,
+	let alias = match &cmd.args.get(0) {
+		Some(a) => a.clone(),
 		None => return Ok(Some("❌ no alias name provided".into()))
 	};
 
@@ -62,7 +64,7 @@ async fn set_alias(
 		None => return Ok(Some("❌ no alias command provided".into())),
 	};
 
-	db::set_alias(pool, &cmd.sender.name, &alias, &alias_cmd).await?;
+	db::set_alias(pool, cmd.sender.id, &alias, &alias_cmd).await?;
 
 	Ok(Some("✅ alias created".into()))
 }
@@ -71,15 +73,15 @@ async fn set_alias(
 async fn execute_alias(
 	pool: &SqlitePool,
 	client: TwitchClient,
+	auth: &TwitchAuth,
 	cmd: &CommandSource,
 ) -> anyhow::Result<Option<String>> {
-	let alias = match cmd.args.get(0).clone() {
-		Some(a) => a,
+	let alias = match &cmd.args.get(0).clone() {
+		Some(a) => a.clone(),
 		None => return Ok(Some("❌ missing alias name".into())),
 	};
-	let owner = &cmd.sender.name;
 
-	let alias_cmd = match db::get_alias_cmd(pool, &owner, &alias).await? {
+	let alias_cmd = match db::get_alias_cmd(pool, cmd.sender.id, &alias).await? {
 		Some(alias) => alias
 			.split(' ')
 			.map(|a| a.clone().to_string())
@@ -102,7 +104,7 @@ async fn execute_alias(
 		timestamp: cmd.timestamp.clone(),
 	};
 
-	handle_command(pool, client, new_cmd).await?;
+	handle_command(pool, client, auth, new_cmd).await?;
 
 	Ok(None)
 }
@@ -118,12 +120,10 @@ async fn remove_alias(
 		None => return Ok(Some("❌ no alias provided".into()))
 	};
 
-	match db::remove_alias(pool, &cmd.sender.name, &alias).await? {
+	match db::remove_alias(pool, cmd.sender.id, &alias).await? {
 		0 => return Ok(Some("❌ no such alias".into())),
 		_ => return Ok(Some("✅ alias removed".into())),
 	}
-
-	todo!()
 }
 
 // parse the incoming duration identifying string
@@ -138,6 +138,7 @@ fn parse_duration_to_hm(s: &String) -> anyhow::Result<(i64, i64)> {
 // add a reminder for someone
 async fn add_reminder(
 	pool: &SqlitePool,
+	auth: &TwitchAuth,
 	cmd: &CommandSource,
 	is_for_self: bool,
 ) -> anyhow::Result<Option<String>> {
@@ -162,19 +163,22 @@ async fn add_reminder(
 		Err(_) => return Ok(Some("❌ no message provided".into())),
 	};
 
+	let for_user_id = match twitch_api::id_from_nick(to_user_name, auth).await? {
+		Some(id) => id,
+		None => return Ok(Some("❌ user nonexistant".into()))
+	};
+
 	let reminder = db::Reminder {
-		// dummy
-		id: 0,
+		id: 0, // dummy
 		from_user_id: cmd.sender.id,
-		// TODO: translate name to id
-		for_user_id: todo!(),
 		raise_timestamp: remind_time,
-		message: message,
+		for_user_id,
+		message,
 	};
 
 	db::insert_reminder(pool, &reminder).await?;
 
-	Ok(Some("✅ set successfully.".into()))
+	Ok(Some("✅ set successfully".into()))
 }
 
 // clears reminders user has sent out
@@ -258,10 +262,14 @@ pub async fn explain (
 // returns the first message of user
 pub async fn first_message(
 	pool: &SqlitePool,
+	auth: &TwitchAuth,
 	cmd:  &CommandSource,
 ) -> anyhow::Result<Option<String>> {
 	let sender_id = match &cmd.args.get(0) {
-		Some(name) => twitch_api::id_from_nick(),
+		Some(name) => match twitch_api::id_from_nick(name, auth).await? {
+			Some(id) => id,
+			None => return Ok(Some(format!("user {} nonexistant", name)))
+		},
 		None => cmd.sender.id,
 	};
 
@@ -287,9 +295,14 @@ pub async fn suggest(
 		None => return Ok(Some("❌ no message".into())),
 	};
 
-	let sender_id = cmd.sender.id.parse::<i32>().unwrap();
 
-	db::save_suggestion(pool, sender_id, &cmd.sender.name, &text, Utc::now()).await?;
+	db::save_suggestion(
+		pool,
+		cmd.sender.id,
+		&cmd.sender.name,
+		&text,
+		Utc::now()
+	).await?;
 
 	Ok(Some("✅ suggestion saved".into()))
 }

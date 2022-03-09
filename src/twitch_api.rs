@@ -1,20 +1,16 @@
-// https://github.com/dynamo58/lovcen/blob/master/src/utils/twitch.js
-// https://crates.io/crates/reqwest
-    // https://docs.rs/reqwest/0.11.9/reqwest/header/index.html
-
+use crate::TwitchAuth;
 
 use reqwest::Client;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize};
 
-// use reqwest::header::ACCEPT;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct UsersResponse {
     pub data: Vec<UsersResponseData>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct UsersResponseData {
     pub id: String,
@@ -32,7 +28,8 @@ pub struct UsersResponseData {
     pub offline_image_url: String,
     #[serde(rename = "view_count")]
     pub view_count: i64,
-    pub email: String,
+    // this is missing for some reason?
+    // pub email: String,
     #[serde(rename = "created_at")]
     pub created_at: String,
 }
@@ -41,22 +38,46 @@ pub struct UsersResponseData {
 // ref: https://dev.twitch.tv/docs/api/reference#get-users
 pub async fn id_from_nick(
     nick: &str,
-    client_id: &str,
-    auth: &str
-) -> anyhow::Result<String> {
+    auth: &TwitchAuth,
+) -> anyhow::Result<Option<i32>> {
     let client = Client::new();
 
     let res = client
         .get(&format!("https://api.twitch.tv/helix/users?login={nick}"))
-        .header("Client-ID", client_id)
-        .header("Authorization", auth)
+        .header("Client-ID", auth.client_id.clone())
+        .header("Authorization", format!("Bearer {}", auth.oauth.clone()))
         .send()
+        .await?
+        .text()
         .await?;
 
-    let id = res.json::<APIResponse>()
-        .await
-        .data[0].id
+    let parsed: UsersResponse = serde_json::from_str(&res)?;
 
-    println!("{:#?}", resp);
-    Ok(())
+    match parsed.data.get(0) {
+        Some(data) => return Ok(Some(data.id.parse::<i32>().unwrap())),
+        None => return Ok(None),
+    };
+}
+
+// translates users id to name
+// ref: https://dev.twitch.tv/docs/api/reference#get-users
+pub async fn nick_from_id(
+    user_id: i32,
+    auth: TwitchAuth,
+) -> anyhow::Result<String> {
+    let client = Client::new();
+
+    let res = client
+        .get(&format!("https://api.twitch.tv/helix/users?id={user_id}"))
+        .header("Client-ID", auth.client_id.clone())
+        .header("Authorization", format!("Bearer {}", auth.oauth.clone()))
+        .send()
+        .await?
+        .text()
+        .await?;
+
+    let parsed: UsersResponse = serde_json::from_str(&res)?;
+    let nick = &parsed.data[0].login;
+
+    Ok(nick.to_owned())
 }
