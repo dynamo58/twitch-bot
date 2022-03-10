@@ -6,11 +6,11 @@ mod api_models;
 use twitch_bot::{Config, CommandSource, MyError, TwitchAuth, NameIdCache};
 use commands::handle_command;
 
-use std::sync::{Arc, Mutex},
+use std::sync::{Arc, Mutex};
 
 use dotenv::dotenv;
 use sqlx::sqlite::SqlitePool;
-use tokio_cron_scheduler::{JobScheduler, JobToRun, Job};
+use tokio_cron_scheduler::{JobScheduler, Job};
 use tracing::{info, /* error, warn */};
 use twitch_irc::login::StaticLoginCredentials;
 use twitch_irc::{ClientConfig, SecureTCPTransport, TwitchIRCClient};
@@ -32,7 +32,8 @@ async fn main() -> anyhow::Result<()> {
 	
 	// this will hold cached names and ids of users
 	// to prevent flooding the Twitch API too much
-	let mut name_id_cache = NameIdCache::new()
+	let name_id_cache = Arc::new(Mutex::new(NameIdCache::new()));
+	let cache_arc = name_id_cache.clone();
 	
 	// holding on to the ids would be dumb
 	// it would make the amount of memory used
@@ -42,17 +43,17 @@ async fn main() -> anyhow::Result<()> {
 	// instead
 	// therefore the cache is to be cleared
 	// every, say, 5 minutes
-	let mut sched = Arc::new(Mutex::new(JobScheduler::new()));
+	let mut sched = JobScheduler::new();
 
 	// the format of these is as follows:
 	// sec   min   hour   day of month   month   day of week   year
 	// *     *     *      *              *       *             *
-	sched.add(Job::new("* 1/5 * * * *", |uuid, l| {
-		let cache_arc = name_id_cache.clone()
-        if let Ok(mut cache) = cache.lock() {
-			*cache.clear();
+	sched.add(Job::new("* 1/5 * * * *", move |_, _| {
+        if let Ok(mut cache) = cache_arc.lock() {
+			(*cache).clear();
         };
-    }).unwrap());
+    }).unwrap())
+		.expect("Setting up a scheduled task failed, but why?");
 
 	// load all of the credentials and configurations
 	let config = Config::from_config_file()
@@ -97,7 +98,7 @@ async fn main() -> anyhow::Result<()> {
 
     let message_listener_handle = {
 		let auth = auth.clone();
-		let cache_arc = Arc::clone(name_id_cache);
+		let cache_arc = name_id_cache.clone();
 
 		tokio::spawn(async move {
 			// capture incoming messages
@@ -148,7 +149,7 @@ async fn main() -> anyhow::Result<()> {
 					// if message is a command, handle it
 					if privmsg.message_text.chars().nth(0).unwrap() == config.prefix {
 						let cmd_src = CommandSource::from_privmsg(privmsg);
-						handle_command(&pool, client.clone(), &config, &auth, cache_arc, cmd_src).await.unwrap();
+						handle_command(&pool, client.clone(), &config, &auth, cache_arc.clone(), cmd_src).await.unwrap();
 					} else {
 						// index for markov if enabled by config
 						if config.index_markov {
@@ -160,7 +161,7 @@ async fn main() -> anyhow::Result<()> {
 		})
 	};
 
-	sched.start().await;
+	sched.start().await.unwrap();
     message_listener_handle.await.unwrap();
     Ok(())
 }

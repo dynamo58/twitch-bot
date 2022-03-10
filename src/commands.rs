@@ -2,6 +2,8 @@ use crate::{CommandSource, MyError, TwitchAuth, NameIdCache, Config};
 use crate::db;
 use crate::api;
 
+use std::sync::{Arc, Mutex};
+
 use async_recursion::async_recursion;
 use chrono::{Duration, Utc};
 use rand::{self, Rng};
@@ -19,7 +21,7 @@ pub async fn handle_command(
 	client:     TwitchClient,
 	config:     &Config,
 	auth:       &TwitchAuth,
-	cache_arch: Arc<Mutex<NameIdCache>>,
+	cache_arc: Arc<Mutex<NameIdCache>>,
 	cmd:        CommandSource,
 ) -> anyhow::Result<()> {
 	let cmd_out = match cmd.cmd.as_str() {
@@ -38,7 +40,7 @@ pub async fn handle_command(
 		"remindme"       => add_reminder(&pool, &auth, cache_arc, &cmd, true).await,
 		"remind"         => add_reminder(&pool, &auth, cache_arc, &cmd, false).await,
 		"rose"           => tag_rand_chatter_with_rose(&cmd.channel).await,
-		&config.prefix   => execute_alias(&pool, client.clone(), config, &auth, cache_arch, &cmd).await,
+		_ if (cmd.cmd.as_str() == &config.prefix.to_string()) => execute_alias(&pool, client.clone(), config, &auth, cache_arc, &cmd).await,
 		_ => Ok(None),
 	};
 
@@ -175,20 +177,22 @@ async fn add_reminder(
 	};
 
 	let mut for_user_id: Option<i32> = None;
-	if let Ok(mut cache) = cache_arc.lock() {
+	if let Ok(cache) = cache_arc.lock() {
 		match cache.get(to_user_name) {
-			Some(id) => { for_user_id = id; },
+			Some(id) => { for_user_id = Some(*id); },
 			None     => (), 
 		};
 	}
 
 	match for_user_id {
 		Some(_) => (),
-		None    => match twitch_api::id_from_nick(to_user_name, auth).await? {
-			Some(id) => { for_user_id = id; },
+		None    => match api::id_from_nick(to_user_name, auth).await? {
+			Some(id) => { for_user_id = Some(id); },
 			None     => return Ok(Some("❌ user nonexistant".into()))
 		}
 	}
+
+	let for_user_id = for_user_id.unwrap();
 
 	let reminder = db::Reminder {
 		id: 0, // dummy
@@ -283,18 +287,18 @@ pub async fn explain (
 
 // returns the first message of user
 pub async fn first_message(
-	pool: &SqlitePool,
-	auth: &TwitchAuth,
-	cache_arc: Arc<Mutex<NameIdCache>>
-	cmd:  &CommandSource,
+	pool:      &SqlitePool,
+	auth:      &TwitchAuth,
+	cache_arc: Arc<Mutex<NameIdCache>>,
+	cmd:       &CommandSource,
 ) -> anyhow::Result<Option<String>> {
 	let sender_id = match &cmd.args.get(0) {
 		Some(name) => {
 			let mut _id: Option<i32> = None;
 
-			if let Ok(mut cache) = cache_arc.lock() {
-				match cache.get(name) {
-					Some(id) => { _id = id; },
+			if let Ok(cache) = cache_arc.lock() {
+				match cache.get(*name) {
+					Some(id) => { _id = Some(*id); },
 					None     => (), 
 				};
 			}
@@ -357,17 +361,17 @@ pub async fn tag_rand_chatter_with_rose(
 	Ok(Some(format!("@{rand_chatter} PeepoGlad 🌹")))
 }
 
-pub fn get_weather_report(
+pub async fn get_weather_report(
 	args: &Vec<String>,
 ) -> anyhow::Result<Option<String>> {
-	if args.len == 0 {
-		return Ok(Some("❌ no location provided"));
+	if args.len() == 0 {
+		return Ok(Some("❌ no location provided".into()));
 	}
 
-	let location = args.join(' ');
+	let location = args.join(" ");
 
-	match api::get_get_weather_report(location).await? {
+	match api::get_weather_report(&location).await? {
 		Some(r) => return Ok(Some(r)),
-		None    => return Ok(Some("❌ location not identified")),
+		None    => return Ok(Some("❌ location not identified".into())),
 	}
 }

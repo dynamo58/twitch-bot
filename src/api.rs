@@ -102,26 +102,22 @@ pub async fn get_weather_report(
         .text()
         .await?;
     
-    let mut weather: models::WttrInResponse = serde_json::from_str(&res)?;
 
-    if (weather.cod != 404) {
-        let dir = weather.current_condition[0].winddir16Point;
+    let weather: models::WttrInResponse = serde_json::from_str(&res)?;
 
-        let temp = format!("🌡️ {}°C", weather.current_condition[0].temp_C);
+
+
+        let dir = &weather.current_condition[0].winddir16point;
+
+        let temp = format!("🌡️ {}°C", weather.current_condition[0].temp_c);
         let humid = format!("🌫️ {}%", weather.current_condition[0].humidity);
         let pressure = format!("🔽 {}hPa", weather.current_condition[0].pressure);
-        let precip = format!("💧 {}mm", weather.current_condition[0].precipMM);
-        let wind = format!("{dir} {}km/h", weather.current_condition[0].windspeedKmph);
-
-        let mut area = String::new();
-        let mut country = String::new();
+        let precip = format!("💧 {}mm", weather.current_condition[0].precip_mm);
+        let wind = format!("{dir} {}km/h", weather.current_condition[0].windspeed_kmph);
 
         // this will at some point cause issues
-        area = weather.nearest_area[0].areaName[0].value;
-        country = weather.nearest_area[0].country[0].value;
+        let area = &weather.nearest_area[0].area_name[0].value;
+        let country = &weather.nearest_area[0].country[0].value;
 
         return Ok(Some(format!("Weather in {location}, {area}, {country}: {temp}, {humid}, {pressure}, {precip}, {wind}")));
-    } else {
-        return Ok(None);
-    }
 }
