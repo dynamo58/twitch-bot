@@ -1,6 +1,6 @@
 use crate::{CommandSource, MyError, TwitchAuth, NameIdCache, Config};
 use crate::db;
-use crate::twitch_api;
+use crate::api;
 
 use async_recursion::async_recursion;
 use chrono::{Duration, Utc};
@@ -31,13 +31,14 @@ pub async fn handle_command(
 		"setalias"       => set_alias(&pool, &cmd).await,
 		"rmalias"        => remove_alias(&pool, &cmd).await,
 		"explain"        => explain(&pool, &cmd.args[0]).await,
-		"first"          => first_message(&pool, &auth, &cmd).await,
+		"weather"        => get_weather_report(&cmd.args).await,
 		"clearreminders" => clear_reminders(&pool, cmd.sender.id).await,
 		"rmrm"           => clear_reminders(&pool, cmd.sender.id).await,
+		"first"          => first_message(&pool, &auth, cache_arc, &cmd).await,
 		"remindme"       => add_reminder(&pool, &auth, cache_arc, &cmd, true).await,
 		"remind"         => add_reminder(&pool, &auth, cache_arc, &cmd, false).await,
 		"rose"           => tag_rand_chatter_with_rose(&cmd.channel).await,
-		&config.prefix   => execute_alias(&pool, client.clone(), &auth, &cmd).await,
+		&config.prefix   => execute_alias(&pool, client.clone(), config, &auth, cache_arch, &cmd).await,
 		_ => Ok(None),
 	};
 
@@ -80,7 +81,9 @@ async fn set_alias(
 async fn execute_alias(
 	pool: &SqlitePool,
 	client: TwitchClient,
+	config: &Config,
 	auth: &TwitchAuth,
+	cache_arc: Arc<Mutex<NameIdCache>>,
 	cmd: &CommandSource,
 ) -> anyhow::Result<Option<String>> {
 	let alias = match &cmd.args.get(0).clone() {
@@ -111,7 +114,7 @@ async fn execute_alias(
 		timestamp: cmd.timestamp.clone(),
 	};
 
-	handle_command(pool, client, auth, new_cmd).await?;
+	handle_command(pool, client, config, auth, cache_arc, new_cmd).await?;
 
 	Ok(None)
 }
@@ -171,7 +174,7 @@ async fn add_reminder(
 		Err(_) => return Ok(Some("❌ no message provided".into())),
 	};
 
-	let mut for_user_id = None;
+	let mut for_user_id: Option<i32> = None;
 	if let Ok(mut cache) = cache_arc.lock() {
 		match cache.get(to_user_name) {
 			Some(id) => { for_user_id = id; },
@@ -282,13 +285,27 @@ pub async fn explain (
 pub async fn first_message(
 	pool: &SqlitePool,
 	auth: &TwitchAuth,
-	cache_arc: cache_arc: Arc<Mutex<NameIdCache>>
+	cache_arc: Arc<Mutex<NameIdCache>>
 	cmd:  &CommandSource,
 ) -> anyhow::Result<Option<String>> {
 	let sender_id = match &cmd.args.get(0) {
-		Some(name) => match twitch_api::id_from_nick(name, auth).await? {
-			Some(id) => id,
-			None => return Ok(Some(format!("user {} nonexistant", name)))
+		Some(name) => {
+			let mut _id: Option<i32> = None;
+
+			if let Ok(mut cache) = cache_arc.lock() {
+				match cache.get(name) {
+					Some(id) => { _id = id; },
+					None     => (), 
+				};
+			}
+
+			match _id {
+				Some(id) => id,
+				None     => match api::id_from_nick(name, auth).await? {
+					Some(id) => id,
+					None     => return Ok(Some(format!("user {} nonexistant", name))),
+				},
+			}
 		},
 		None => cmd.sender.id,
 	};
@@ -330,7 +347,7 @@ pub async fn suggest(
 pub async fn tag_rand_chatter_with_rose(
 	channel_name: &str,
 ) -> anyhow::Result<Option<String>> {
-	let chatters = match twitch_api::get_chatters(channel_name).await? {
+	let chatters = match api::get_chatters(channel_name).await? {
 		Some(chatters) => chatters,
 		None => return Ok(Some("❌ no users in the chatroom".into())),
 	};
@@ -338,4 +355,19 @@ pub async fn tag_rand_chatter_with_rose(
 	let rand_chatter = chatters[rand::thread_rng().gen_range(0..chatters.len())].clone();
 
 	Ok(Some(format!("@{rand_chatter} PeepoGlad 🌹")))
+}
+
+pub fn get_weather_report(
+	args: &Vec<String>,
+) -> anyhow::Result<Option<String>> {
+	if args.len == 0 {
+		return Ok(Some("❌ no location provided"));
+	}
+
+	let location = args.join(' ');
+
+	match api::get_get_weather_report(location).await? {
+		Some(r) => return Ok(Some(r)),
+		None    => return Ok(Some("❌ location not identified")),
+	}
 }

@@ -1,7 +1,7 @@
 mod db;
 mod commands;
-mod twitch_api;
-mod twitch_api_models;
+mod api;
+mod api_models;
 
 use twitch_bot::{Config, CommandSource, MyError, TwitchAuth, NameIdCache};
 use commands::handle_command;
@@ -129,12 +129,12 @@ async fn main() -> anyhow::Result<()> {
 							let from_user = if r.from_user_id == r.for_user_id {
 								"yourself".into()
 							} else {
-								twitch_api::nick_from_id(r.from_user_id, auth.clone())
+								api::nick_from_id(r.from_user_id, auth.clone())
 								.await
 								.unwrap()
 							};
 							
-							let for_user = twitch_api::nick_from_id(r.for_user_id, auth.clone())
+							let for_user = api::nick_from_id(r.for_user_id, auth.clone())
 								.await
 								.unwrap();
 							

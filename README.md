@@ -19,7 +19,8 @@ A simple Twitch bot in Rust with quite specific features.
 | \[prefix\]     | \[alias name: str\]                  | execute an alias |
 | rmalias        | \[alias name: str\]                  | remove an alias |
 | first          | [nick: opt(str)] [channel: opt(str)] | get the first logged message of a user (in any channel) |
-| rose           | None                                 | send a rose to a random fellow chatter!
+| rose           | None                                 | send a rose to a random fellow chatter! |
+| weather        | [location: text]                     | get weather report from specified location |
 
 # Get started
 
