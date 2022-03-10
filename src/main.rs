@@ -1,28 +1,60 @@
-mod commands;
 mod db;
+mod commands;
 mod twitch_api;
 mod twitch_api_models;
 
-use twitch_bot::{Config, CommandSource, MyError, TwitchAuth};
+use twitch_bot::{Config, CommandSource, MyError, TwitchAuth, NameIdCache};
 use commands::handle_command;
+
+use std::sync::{Arc, Mutex},
 
 use dotenv::dotenv;
 use sqlx::sqlite::SqlitePool;
+use tokio_cron_scheduler::{JobScheduler, JobToRun, Job};
 use tracing::{info, /* error, warn */};
 use twitch_irc::login::StaticLoginCredentials;
 use twitch_irc::{ClientConfig, SecureTCPTransport, TwitchIRCClient};
 use twitch_irc::message::ServerMessage;
 
-
+// path to database file
+// for now, it is a singular file - 
+// that might be subject to change
+// in the future, idk
 const DB_PATH: &str = "sqlite:db.db";
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
 	// load environment variables from `.env` file
 	dotenv().ok();
+	
 	// init tracing subscriber
 	// tracing_subscriber::fmt::init();
+	
+	// this will hold cached names and ids of users
+	// to prevent flooding the Twitch API too much
+	let mut name_id_cache = NameIdCache::new()
+	
+	// holding on to the ids would be dumb
+	// it would make the amount of memory used
+	// go up indefinitely during runtime + 
+	// one might as well not use ids for user
+	// identification at all and go by names
+	// instead
+	// therefore the cache is to be cleared
+	// every, say, 5 minutes
+	let mut sched = Arc::new(Mutex::new(JobScheduler::new()));
 
+	// the format of these is as follows:
+	// sec   min   hour   day of month   month   day of week   year
+	// *     *     *      *              *       *             *
+	sched.add(Job::new("* 1/5 * * * *", |uuid, l| {
+		let cache_arc = name_id_cache.clone()
+        if let Ok(mut cache) = cache.lock() {
+			*cache.clear();
+        };
+    }).unwrap());
+
+	// load all of the credentials and configurations
 	let config = Config::from_config_file()
 		.expect("Couldn't load config, aborting.");
 	let auth = TwitchAuth::from_dotenv()
@@ -33,6 +65,8 @@ async fn main() -> anyhow::Result<()> {
 		.await
 		.expect("Database connection could not be established, aborting.");
 
+	// create all of that stuff necessary
+	// to be present in database
 	db::init_db(&pool)
 		.await
 		.expect("Database could not be set up, aborting.");
@@ -61,8 +95,9 @@ async fn main() -> anyhow::Result<()> {
 		info!("joined channel {channel}");
 	}
 
-    let join_handle = {
+    let message_listener_handle = {
 		let auth = auth.clone();
+		let cache_arc = Arc::clone(name_id_cache);
 
 		tokio::spawn(async move {
 			// capture incoming messages
@@ -113,7 +148,7 @@ async fn main() -> anyhow::Result<()> {
 					// if message is a command, handle it
 					if privmsg.message_text.chars().nth(0).unwrap() == config.prefix {
 						let cmd_src = CommandSource::from_privmsg(privmsg);
-						handle_command(&pool, client.clone(), &auth, cmd_src).await.unwrap();
+						handle_command(&pool, client.clone(), &config, &auth, cache_arc, cmd_src).await.unwrap();
 					} else {
 						// index for markov if enabled by config
 						if config.index_markov {
@@ -125,6 +160,7 @@ async fn main() -> anyhow::Result<()> {
 		})
 	};
 
-    join_handle.await.unwrap();
+	sched.start().await;
+    message_listener_handle.await.unwrap();
     Ok(())
 }

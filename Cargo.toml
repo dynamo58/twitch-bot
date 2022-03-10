@@ -18,6 +18,7 @@ serde_json = "1.0.79"
 sqlx = { version = "0.5.11", features = [ "runtime-tokio-rustls", "sqlite", "chrono"] }
 thiserror = "1.0.30"
 tokio = "1.17.0"
+tokio-cron-scheduler = "0.5.0"
 twitch-irc = "3.0.1"
 tracing = "0.1.31"
 tracing-subscriber = "0.3.9"

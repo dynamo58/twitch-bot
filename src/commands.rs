@@ -1,4 +1,4 @@
-use crate::{CommandSource, MyError, TwitchAuth};
+use crate::{CommandSource, MyError, TwitchAuth, NameIdCache, Config};
 use crate::db;
 use crate::twitch_api;
 
@@ -13,10 +13,14 @@ type TwitchClient = twitch_irc::TwitchIRCClient<twitch_irc::transport::tcp::TCPT
 // handle incoming commands
 #[async_recursion]
 pub async fn handle_command(
-	pool: &SqlitePool,
-	client: TwitchClient,
-	auth: &TwitchAuth,
-	cmd: CommandSource,
+	// this looks like an abomination
+	// but it is what it is
+	pool:       &SqlitePool,
+	client:     TwitchClient,
+	config:     &Config,
+	auth:       &TwitchAuth,
+	cache_arch: Arc<Mutex<NameIdCache>>,
+	cmd:        CommandSource,
 ) -> anyhow::Result<()> {
 	let cmd_out = match cmd.cmd.as_str() {
 		"ping"           => ping(),
@@ -26,14 +30,14 @@ pub async fn handle_command(
 		"suggest"        => suggest(&pool, &cmd).await,
 		"setalias"       => set_alias(&pool, &cmd).await,
 		"rmalias"        => remove_alias(&pool, &cmd).await,
-		"first"          => first_message(&pool, &auth, &cmd).await,
 		"explain"        => explain(&pool, &cmd.args[0]).await,
-		"remindme"       => add_reminder(&pool, &auth, &cmd, true).await,
-		"remind"         => add_reminder(&pool, &auth, &cmd, false).await,
+		"first"          => first_message(&pool, &auth, &cmd).await,
 		"clearreminders" => clear_reminders(&pool, cmd.sender.id).await,
 		"rmrm"           => clear_reminders(&pool, cmd.sender.id).await,
-		"$"              => execute_alias(&pool, client.clone(), &auth, &cmd).await,
+		"remindme"       => add_reminder(&pool, &auth, cache_arc, &cmd, true).await,
+		"remind"         => add_reminder(&pool, &auth, cache_arc, &cmd, false).await,
 		"rose"           => tag_rand_chatter_with_rose(&cmd.channel).await,
+		&config.prefix   => execute_alias(&pool, client.clone(), &auth, &cmd).await,
 		_ => Ok(None),
 	};
 
@@ -142,6 +146,7 @@ fn parse_duration_to_hm(s: &String) -> anyhow::Result<(i64, i64)> {
 async fn add_reminder(
 	pool: &SqlitePool,
 	auth: &TwitchAuth,
+	cache_arc: Arc<Mutex<NameIdCache>>,
 	cmd: &CommandSource,
 	is_for_self: bool,
 ) -> anyhow::Result<Option<String>> {
@@ -162,14 +167,25 @@ async fn add_reminder(
 
 	let start_idx = if is_for_self { 1 } else { 2 };
 	let message = match cmd.args.get(start_idx).ok_or(MyError::OutOfBounds) {
-		Ok(_) => cmd.args[start_idx..].join(" "),
+		Ok(_)  => cmd.args[start_idx..].join(" "),
 		Err(_) => return Ok(Some("❌ no message provided".into())),
 	};
 
-	let for_user_id = match twitch_api::id_from_nick(to_user_name, auth).await? {
-		Some(id) => id,
-		None => return Ok(Some("❌ user nonexistant".into()))
-	};
+	let mut for_user_id = None;
+	if let Ok(mut cache) = cache_arc.lock() {
+		match cache.get(to_user_name) {
+			Some(id) => { for_user_id = id; },
+			None     => (), 
+		};
+	}
+
+	match for_user_id {
+		Some(_) => (),
+		None    => match twitch_api::id_from_nick(to_user_name, auth).await? {
+			Some(id) => { for_user_id = id; },
+			None     => return Ok(Some("❌ user nonexistant".into()))
+		}
+	}
 
 	let reminder = db::Reminder {
 		id: 0, // dummy
@@ -266,6 +282,7 @@ pub async fn explain (
 pub async fn first_message(
 	pool: &SqlitePool,
 	auth: &TwitchAuth,
+	cache_arc: cache_arc: Arc<Mutex<NameIdCache>>
 	cmd:  &CommandSource,
 ) -> anyhow::Result<Option<String>> {
 	let sender_id = match &cmd.args.get(0) {
