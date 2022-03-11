@@ -51,6 +51,7 @@ async fn main() -> anyhow::Result<()> {
 	sched.add(Job::new("* 1/15 * * * *", move |_, _| {
         if let Ok(mut cache) = cache_arc.lock() {
 			(*cache).clear();
+			println!("{}   Cleared name-id cache", "INFO".blue().bold());
         };
     }).unwrap())
 		.expect(&format!("{}   Setting up a scheduled task failed, but why?", "ERROR".red().bold()));

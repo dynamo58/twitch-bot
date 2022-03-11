@@ -5,7 +5,7 @@ use crate::api;
 use std::sync::{Arc, Mutex};
 
 use async_recursion::async_recursion;
-use chrono::{Duration, Utc};
+use chrono::{Duration, Utc, DateTime};
 use rand::{self, Rng};
 use sqlx::sqlite::SqlitePool;
 
@@ -36,10 +36,11 @@ pub async fn handle_command(
 		"weather"        => get_weather_report(&cmd.args).await,
 		"clearreminders" => clear_reminders(&pool, cmd.sender.id).await,
 		"rmrm"           => clear_reminders(&pool, cmd.sender.id).await,
+		"rose"           => tag_rand_chatter_with_rose(&cmd.channel).await,
 		"first"          => first_message(&pool, &auth, cache_arc, &cmd).await,
 		"remindme"       => add_reminder(&pool, &auth, cache_arc, &cmd, true).await,
 		"remind"         => add_reminder(&pool, &auth, cache_arc, &cmd, false).await,
-		"rose"           => tag_rand_chatter_with_rose(&cmd.channel).await,
+		"uptime"         => get_uptime(&cmd).await,
 		_ if (cmd.cmd.as_str() == &config.prefix.to_string()) => execute_alias(&pool, client.clone(), config, &auth, cache_arc, &cmd).await,
 		_ => Ok(None),
 	};
@@ -339,7 +340,7 @@ pub async fn first_message(
 
 	match message {
 		Some(msg) => return Ok(Some(msg)),
-		None => return Ok(Some("❌ nothing found | E2".into())),
+		None      => return Ok(Some("❌ nothing found | E2".into())),
 	}
 }
 
@@ -349,7 +350,7 @@ pub async fn suggest(
 ) -> anyhow::Result<Option<String>> {
 	let text = match &cmd.args.get(0) {
 		Some(_) => cmd.args.join(" "),
-		None => return Ok(Some("❌ no message".into())),
+		None    => return Ok(Some("❌ no message".into())),
 	};
 
 	db::save_suggestion(
@@ -368,7 +369,7 @@ pub async fn tag_rand_chatter_with_rose(
 ) -> anyhow::Result<Option<String>> {
 	let chatters = match api::get_chatters(channel_name).await? {
 		Some(chatters) => chatters,
-		None => return Ok(Some("❌ no users in the chatroom".into())),
+		None           => return Ok(Some("❌ no users in the chatroom".into())),
 	};
 
 	let rand_chatter = chatters[rand::thread_rng().gen_range(0..chatters.len())].clone();
@@ -390,3 +391,23 @@ pub async fn get_weather_report(
 		None    => return Ok(Some("❌ location not identified".into())),
 	}
 }
+
+// get uptime of a stream
+pub async fn get_uptime(
+	auth: TwitchAuth,
+	cmd: &CommandSource,
+) -> anyhow::Result<Option<String>> {
+	let channel = match &cmd.args.get(0) {
+		Some(a) => a,
+		None    => &cmd.channel,
+	};
+
+	let info = match api::get_stream_info(auth, cmd).await? {
+		Some(i) => i,
+		None    => return Ok(Some("❌ streamer not live".into())),
+	};
+	let duration = Utc::now() - info.data[0].started_at;
+
+	Ok(Some(format!("{} has been live for {}h, {} min, {} sec", now.hour(), now.minute(), now.second())))
+}
+

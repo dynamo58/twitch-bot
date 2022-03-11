@@ -89,6 +89,31 @@ pub async fn get_chatters(
     }
 }
 
+// gets information about a stream
+// ref: https://dev.twitch.tv/docs/api/reference#get-streams
+pub async fn get_stream_info(
+    channel_name: &str,
+    auth: TwitchAuth,
+) -> anyhow::Result<Option<StreamsResponse>> {
+    let client = Client::new();
+
+    let res = client
+        .get(&format!("https://api.twitch.tv/helix/streams?user_login={channel_name}"))
+        .header("Client-ID", auth.client_id.clone())
+        .header("Authorization", format!("Bearer {}", auth.oauth.clone()))
+        .send()
+        .await?
+        .text()
+        .await?;
+
+    match serde_json::from_str<models::StreamsResponse>(&res) {
+        Ok(info) => return Ok(Some(Info)),
+        Err(e)   => return Ok(None),
+    }
+}
+
+// https://dev.twitch.tv/docs/api/reference#get-users-follows
+
 // —————————————————————————————————————————
 //               Other APIs
 // —————————————————————————————————————————
