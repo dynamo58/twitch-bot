@@ -9,7 +9,6 @@ use chrono::{Duration, Utc};
 use rand::{self, Rng};
 use sqlx::sqlite::SqlitePool;
 
-
 type TwitchClient = twitch_irc::TwitchIRCClient<twitch_irc::transport::tcp::TCPTransport<twitch_irc::transport::tcp::TLS>, twitch_irc::login::StaticLoginCredentials>;
 
 // handle incoming commands

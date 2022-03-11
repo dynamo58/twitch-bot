@@ -8,10 +8,11 @@ use commands::handle_command;
 
 use std::sync::{Arc, Mutex};
 
+use colored::*;
 use dotenv::dotenv;
 use sqlx::sqlite::SqlitePool;
 use tokio_cron_scheduler::{JobScheduler, Job};
-use tracing::{info, /* error, warn */};
+use tracing::{/* info, error, warn */};
 use twitch_irc::login::StaticLoginCredentials;
 use twitch_irc::{ClientConfig, SecureTCPTransport, TwitchIRCClient};
 use twitch_irc::message::ServerMessage;
@@ -35,12 +36,11 @@ async fn main() -> anyhow::Result<()> {
 	let name_id_cache = Arc::new(Mutex::new(NameIdCache::new()));
 	let cache_arc = name_id_cache.clone();
 	
-	// holding on to the ids would be dumb
+	// holding on to the ids forever would be dumb;
 	// it would make the amount of memory used
 	// go up indefinitely during runtime + 
 	// one might as well not use ids for user
-	// identification at all and go by names
-	// instead
+	// identification at all and go by names instead
 	// therefore the cache is to be cleared
 	// every, say, 5 minutes
 	let mut sched = JobScheduler::new();
@@ -53,31 +53,41 @@ async fn main() -> anyhow::Result<()> {
 			(*cache).clear();
         };
     }).unwrap())
-		.expect("Setting up a scheduled task failed, but why?");
+		.expect(&format!("{}   Setting up a scheduled task failed, but why?", "ERROR".red().bold()));
+
+	println!("{}   Set up scheduled tasks", "INFO".blue().bold());
 
 	// load all of the credentials and configurations
 	let config = Config::from_config_file()
-		.expect("Couldn't load config, aborting.");
+		.expect(&format!("{}   Couldn't load config, aborting.", "ERROR".red().bold()));
 	let auth = TwitchAuth::from_dotenv()
-		.expect("Couldn't load Twitch credentials from .env");
+		.expect(&format!("{}   Couldn't load Twitch credentials from .env");
+
+	println!("{}   Obtained credentials and config from local files", "INFO".blue().bold());
 
 	// instantiate database connection pool
     let pool = SqlitePool::connect(DB_PATH)
 		.await
-		.expect("Database connection could not be established, aborting.");
+		.expect(&format!("{}   Database connection could not be established, aborting.", "ERROR".red().bold());
 
 	// create all of that stuff necessary
 	// to be present in database
 	db::init_db(&pool)
 		.await
-		.expect("Database could not be set up, aborting.");
+		.expect(&format!("{}   Database could not be set up, aborting.", "ERROR".red().bold()));
 
 	// create database tables for channels in config
 	// (if they do not already exist)
 	for channel in &config.channels {
 		db::try_create_tables_for_channel(&pool, channel)
 			.await
-			.expect(&format!("Could not create tables for channel \"{channel}\", aborting"));
+			.expect(
+				&format!(
+					"{}   Could not create tables for channel \"{}\", aborting",
+					"ERROR".red().bold(),
+					channel.bold()
+				)
+			);
 	}
 
 	// instantiate Twitch client
@@ -93,7 +103,7 @@ async fn main() -> anyhow::Result<()> {
 	// join all channels in config
 	for channel in &config.channels {
 		client.join(channel.into());
-		info!("joined channel {channel}");
+		println!("{}   Joined #{}", "INFO".blue().bold(), channel.bold());
 	}
 
     let message_listener_handle = {
@@ -115,7 +125,7 @@ async fn main() -> anyhow::Result<()> {
 					//	, so that's taken care off)
 					match db::log(&pool, &privmsg).await {
 						Ok(_) => (),
-						Err(e) => println!("{e}"),
+						Err(e) => println!("{}   Uncaught error; message: {e}", "ERROR".red().bold()),
 					};
 	
 					// check if user has any reminders set for him
