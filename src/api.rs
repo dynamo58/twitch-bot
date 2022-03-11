@@ -92,9 +92,9 @@ pub async fn get_chatters(
 // gets information about a stream
 // ref: https://dev.twitch.tv/docs/api/reference#get-streams
 pub async fn get_stream_info(
+    auth: &TwitchAuth,
     channel_name: &str,
-    auth: TwitchAuth,
-) -> anyhow::Result<Option<StreamsResponse>> {
+) -> anyhow::Result<Option<models::StreamsResponse>> {
     let client = Client::new();
 
     let res = client
@@ -106,10 +106,12 @@ pub async fn get_stream_info(
         .text()
         .await?;
 
-    match serde_json::from_str<models::StreamsResponse>(&res) {
-        Ok(info) => return Ok(Some(Info)),
-        Err(e)   => return Ok(None),
-    }
+    let info: Option<models::StreamsResponse> = match serde_json::from_str(&res) {
+        Ok(i) => Some(i),
+        Err(_)   => None,
+    };
+
+    Ok(info)
 }
 
 // https://dev.twitch.tv/docs/api/reference#get-users-follows

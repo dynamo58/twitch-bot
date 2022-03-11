@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize};
 use chrono::{DateTime, Utc};
 
 // —————————————————————————————————————————
@@ -65,14 +65,14 @@ pub struct Chatters {
     pub viewers: Vec<String>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StreamsResponse {
     pub data: Vec<Daum>,
     pub pagination: Pagination,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Daum {
     pub id: String,
@@ -102,7 +102,7 @@ pub struct Daum {
     pub is_mature: bool,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Pagination {
 }

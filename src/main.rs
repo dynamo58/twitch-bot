@@ -12,7 +12,7 @@ use colored::*;
 use dotenv::dotenv;
 use sqlx::sqlite::SqlitePool;
 use tokio_cron_scheduler::{JobScheduler, Job};
-use tracing::{/* info, error, warn */};
+// use tracing::{info, error, warn};
 use twitch_irc::login::StaticLoginCredentials;
 use twitch_irc::{ClientConfig, SecureTCPTransport, TwitchIRCClient};
 use twitch_irc::message::ServerMessage;
@@ -48,34 +48,34 @@ async fn main() -> anyhow::Result<()> {
 	// the format of these is as follows:
 	// sec   min   hour   day of month   month   day of week   year
 	// *     *     *      *              *       *             *
-	sched.add(Job::new("* 1/15 * * * *", move |_, _| {
+	sched.add(Job::new("0 1/15 * * * *", move |_, _| {
         if let Ok(mut cache) = cache_arc.lock() {
 			(*cache).clear();
-			println!("{}   Cleared name-id cache", "INFO".blue().bold());
+			println!("{}   Cleared name-id cache", "INFO   ".blue().bold());
         };
     }).unwrap())
-		.expect(&format!("{}   Setting up a scheduled task failed, but why?", "ERROR".red().bold()));
+		.expect(&format!("{}   Setting up a scheduled task failed, but why?", "ERROR  ".red().bold()));
 
-	println!("{}   Set up scheduled tasks", "INFO".blue().bold());
+	println!("{}   Set up scheduled tasks", "INFO   ".blue().bold());
 
 	// load all of the credentials and configurations
 	let config = Config::from_config_file()
-		.expect(&format!("{}   Couldn't load config, aborting.", "ERROR".red().bold()));
+		.expect(&format!("{}   Couldn't load config, aborting.", "ERROR  ".red().bold()));
 	let auth = TwitchAuth::from_dotenv()
-		.expect(&format!("{}   Couldn't load Twitch credentials from .env");
+		.expect(&format!("{}   Couldn't load Twitch credentials from .env", "ERROR  ".red().bold()));
 
-	println!("{}   Obtained credentials and config from local files", "INFO".blue().bold());
+	println!("{}   Obtained credentials and config from local files", "INFO   ".blue().bold());
 
 	// instantiate database connection pool
     let pool = SqlitePool::connect(DB_PATH)
 		.await
-		.expect(&format!("{}   Database connection could not be established, aborting.", "ERROR".red().bold());
+		.expect(&format!("{}   Database connection could not be established, aborting.", "ERROR  ".red().bold()));
 
 	// create all of that stuff necessary
 	// to be present in database
 	db::init_db(&pool)
 		.await
-		.expect(&format!("{}   Database could not be set up, aborting.", "ERROR".red().bold()));
+		.expect(&format!("{}   Database could not be set up, aborting.", "ERROR  ".red().bold()));
 
 	// create database tables for channels in config
 	// (if they do not already exist)
@@ -85,7 +85,7 @@ async fn main() -> anyhow::Result<()> {
 			.expect(
 				&format!(
 					"{}   Could not create tables for channel \"{}\", aborting",
-					"ERROR".red().bold(),
+					"ERROR  ".red().bold(),
 					channel.bold()
 				)
 			);
@@ -104,7 +104,7 @@ async fn main() -> anyhow::Result<()> {
 	// join all channels in config
 	for channel in &config.channels {
 		client.join(channel.into());
-		println!("{}   Joined #{}", "INFO".blue().bold(), channel.bold());
+		println!("{}   Joined #{}", "INFO   ".blue().bold(), channel.bold());
 	}
 
     let message_listener_handle = {
@@ -126,7 +126,7 @@ async fn main() -> anyhow::Result<()> {
 					//	, so that's taken care off)
 					match db::log(&pool, &privmsg).await {
 						Ok(_) => (),
-						Err(e) => println!("{}   Uncaught error; message: {e}", "ERROR".red().bold()),
+						Err(e) => println!("{}   Uncaught error; message: {e}", "ERROR    ".red().bold()),
 					};
 	
 					// check if user has any reminders set for him
@@ -172,6 +172,7 @@ async fn main() -> anyhow::Result<()> {
 		})
 	};
 
+	println!("{}   Bot is now running!", "SUCCESS".green().bold());
 	sched.start().await.unwrap();
     message_listener_handle.await.unwrap();
     Ok(())

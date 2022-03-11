@@ -5,7 +5,7 @@ use crate::api;
 use std::sync::{Arc, Mutex};
 
 use async_recursion::async_recursion;
-use chrono::{Duration, Utc, DateTime};
+use chrono::{Duration, Utc};
 use rand::{self, Rng};
 use sqlx::sqlite::SqlitePool;
 
@@ -24,6 +24,10 @@ pub async fn handle_command(
 	cmd:        CommandSource,
 ) -> anyhow::Result<()> {
 	let cache_arc2 = cache_arc.clone();
+	if let Ok(mut cache) = cache_arc2.lock() {
+		cache.insert(cmd.sender.name.to_owned(), cmd.sender.id);
+	}
+
 	let cmd_out = match cmd.cmd.as_str() {
 		"ping"           => ping(),
 		"echo"           => echo(&cmd.args),
@@ -40,14 +44,12 @@ pub async fn handle_command(
 		"first"          => first_message(&pool, &auth, cache_arc, &cmd).await,
 		"remindme"       => add_reminder(&pool, &auth, cache_arc, &cmd, true).await,
 		"remind"         => add_reminder(&pool, &auth, cache_arc, &cmd, false).await,
-		"uptime"         => get_uptime(&cmd).await,
+		"uptime"         => get_uptime(&auth, &cmd).await,
 		_ if (cmd.cmd.as_str() == &config.prefix.to_string()) => execute_alias(&pool, client.clone(), config, &auth, cache_arc, &cmd).await,
 		_ => Ok(None),
 	};
 
-	if let Ok(mut cache) = cache_arc.lock() {
-		cache.insert(cmd.sender.name, cmd.sender.id);
-	}
+	
 
 	let cmd_out = match cmd_out {
 		Ok(content) => content,
@@ -394,7 +396,7 @@ pub async fn get_weather_report(
 
 // get uptime of a stream
 pub async fn get_uptime(
-	auth: TwitchAuth,
+	auth: &TwitchAuth,
 	cmd: &CommandSource,
 ) -> anyhow::Result<Option<String>> {
 	let channel = match &cmd.args.get(0) {
@@ -402,12 +404,15 @@ pub async fn get_uptime(
 		None    => &cmd.channel,
 	};
 
-	let info = match api::get_stream_info(auth, cmd).await? {
+	let info = match api::get_stream_info(auth, &channel).await? {
 		Some(i) => i,
 		None    => return Ok(Some("❌ streamer not live".into())),
 	};
 	let duration = Utc::now() - info.data[0].started_at;
 
-	Ok(Some(format!("{} has been live for {}h, {} min, {} sec", now.hour(), now.minute(), now.second())))
-}
+	let hrs = duration.num_seconds() % 3600;
+	let mins = (duration.num_seconds() - hrs * 3600) % 60;
+	let secs = duration.num_seconds() - hrs * 3600 - mins * 60;
 
+	Ok(Some(format!("{} has been live for {}h, {} min, {} sec", channel, hrs, mins, secs)))
+}
