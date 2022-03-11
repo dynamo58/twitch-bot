@@ -88,8 +88,6 @@ pub struct CurrentCondition {
     pub feels_like_f: String,
     pub cloudcover: String,
     pub humidity: String,
-    #[serde(rename = "lang_cs")]
-    pub lang_cs: Vec<LangC>,
     pub local_obs_date_time: String,
     #[serde(rename = "observation_time")]
     pub observation_time: String,
@@ -243,8 +241,6 @@ pub struct Hourly {
     pub chanceofwindy: String,
     pub cloudcover: String,
     pub humidity: String,
-    #[serde(rename = "lang_cs")]
-    pub lang_cs: Vec<LangC2>,
     pub precip_inches: String,
     #[serde(rename = "precipMM")]
     pub precip_mm: String,

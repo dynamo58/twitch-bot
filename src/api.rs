@@ -72,6 +72,9 @@ pub async fn get_chatters(
     let mut parsed: models::ChattersResponse = serde_json::from_str(&res)?;
     let mut chatters = vec![];
     
+    // there must be a better way to do this?
+    // ... none come to mind
+
     chatters.append(&mut parsed.chatters.broadcaster);
     chatters.append(&mut parsed.chatters.vips);
     chatters.append(&mut parsed.chatters.moderators);
@@ -101,23 +104,19 @@ pub async fn get_weather_report(
         .await?
         .text()
         .await?;
-    
 
     let weather: models::WttrInResponse = serde_json::from_str(&res)?;
+    let dir = &weather.current_condition[0].winddir16point;
 
+    let temp     = format!("🌡️ {}°C", weather.current_condition[0].temp_c);
+    let humid    = format!("🌫️ {}%", weather.current_condition[0].humidity);
+    let pressure = format!("🔽 {}hPa", weather.current_condition[0].pressure);
+    let precip   = format!("💧 {}mm", weather.current_condition[0].precip_mm);
+    let wind     = format!("💨 {}km/h {dir}", weather.current_condition[0].windspeed_kmph);
 
+    // this might cause at some point cause issues
+    let area = &weather.nearest_area[0].area_name[0].value;
+    let country = &weather.nearest_area[0].country[0].value;
 
-        let dir = &weather.current_condition[0].winddir16point;
-
-        let temp = format!("🌡️ {}°C", weather.current_condition[0].temp_c);
-        let humid = format!("🌫️ {}%", weather.current_condition[0].humidity);
-        let pressure = format!("🔽 {}hPa", weather.current_condition[0].pressure);
-        let precip = format!("💧 {}mm", weather.current_condition[0].precip_mm);
-        let wind = format!("{dir} {}km/h", weather.current_condition[0].windspeed_kmph);
-
-        // this will at some point cause issues
-        let area = &weather.nearest_area[0].area_name[0].value;
-        let country = &weather.nearest_area[0].country[0].value;
-
-        return Ok(Some(format!("Weather in {location}, {area}, {country}: {temp}, {humid}, {pressure}, {precip}, {wind}")));
+    return Ok(Some(format!("Weather in {area}, {country}: {temp}, {humid}, {pressure}, {precip}, {wind}")));
 }

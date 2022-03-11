@@ -48,7 +48,7 @@ async fn main() -> anyhow::Result<()> {
 	// the format of these is as follows:
 	// sec   min   hour   day of month   month   day of week   year
 	// *     *     *      *              *       *             *
-	sched.add(Job::new("* 1/5 * * * *", move |_, _| {
+	sched.add(Job::new("* 1/15 * * * *", move |_, _| {
         if let Ok(mut cache) = cache_arc.lock() {
 			(*cache).clear();
         };
