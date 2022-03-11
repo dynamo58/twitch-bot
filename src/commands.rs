@@ -406,11 +406,22 @@ pub async fn get_uptime(
 		Some(i) => i,
 		None    => return Ok(Some("❌ streamer not live".into())),
 	};
-	let duration = Utc::now() - info.data[0].started_at;
+	let duration = (Utc::now() - info.data[0].started_at).num_seconds();
+	
+	let hrs = (duration as f32 / 3600.0) as u8;
+	let mins = ((duration % 3600) as f32 / 60.0) as u8;
+	let secs = (duration % 60) as u8;
 
-	let hrs = duration.num_seconds() % 3600;
-	let mins = (duration.num_seconds() - hrs * 3600) % 60;
-	let secs = duration.num_seconds() - hrs * 3600 - mins * 60;
+	let mut formatted = String::new();
 
-	Ok(Some(format!("{} has been live for {}h, {} min, {} sec", channel, hrs, mins, secs)))
+	if hrs > 0 {
+		formatted.push_str(&format!("{hrs} hrs, "));
+	}
+	if mins > 0 {
+		formatted.push_str(&format!("{mins} mins, "));
+	}
+
+	formatted.push_str(&format!("{secs} secs"));
+
+	Ok(Some(format!("⏱️ {} has been live for {}", channel, formatted)))
 }

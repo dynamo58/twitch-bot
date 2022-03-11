@@ -106,12 +106,12 @@ pub async fn get_stream_info(
         .text()
         .await?;
 
-    let info: Option<models::StreamsResponse> = match serde_json::from_str(&res) {
-        Ok(i) => Some(i),
-        Err(_)   => None,
-    };
+    let info: models::StreamsResponse = serde_json::from_str(&res)?;
 
-    Ok(info)
+    match info.data.len() {
+        0 => return Ok(None),
+        _ => return Ok(Some(info))
+    }
 }
 
 // https://dev.twitch.tv/docs/api/reference#get-users-follows
