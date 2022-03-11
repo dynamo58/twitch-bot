@@ -24,6 +24,7 @@ pub async fn handle_command(
 	cache_arc: Arc<Mutex<NameIdCache>>,
 	cmd:        CommandSource,
 ) -> anyhow::Result<()> {
+	let cache_arc2 = cache_arc.clone();
 	let cmd_out = match cmd.cmd.as_str() {
 		"ping"           => ping(),
 		"echo"           => echo(&cmd.args),
@@ -43,6 +44,10 @@ pub async fn handle_command(
 		_ if (cmd.cmd.as_str() == &config.prefix.to_string()) => execute_alias(&pool, client.clone(), config, &auth, cache_arc, &cmd).await,
 		_ => Ok(None),
 	};
+
+	if let Ok(mut cache) = cache_arc.lock() {
+		cache.insert(cmd.sender.name, cmd.sender.id);
+	}
 
 	let cmd_out = match cmd_out {
 		Ok(content) => content,
@@ -187,7 +192,13 @@ async fn add_reminder(
 	match for_user_id {
 		Some(_) => (),
 		None    => match api::id_from_nick(to_user_name, auth).await? {
-			Some(id) => { for_user_id = Some(id); },
+			Some(id) => {
+				if let Ok(mut cache) = cache_arc.lock() {
+					cache.insert(to_user_name.to_string(), id);
+				}
+
+				for_user_id = Some(id); 
+			},
 			None     => return Ok(Some("❌ user nonexistant".into()))
 		}
 	}
@@ -306,7 +317,13 @@ pub async fn first_message(
 			match _id {
 				Some(id) => id,
 				None     => match api::id_from_nick(name, auth).await? {
-					Some(id) => id,
+					Some(id) => {
+						if let Ok(mut cache) = cache_arc.lock() {
+							cache.insert(name.to_string(), id);
+						}
+						
+						id
+					},
 					None     => return Ok(Some(format!("user {} nonexistant", name))),
 				},
 			}
@@ -335,7 +352,6 @@ pub async fn suggest(
 		Some(_) => cmd.args.join(" "),
 		None => return Ok(Some("❌ no message".into())),
 	};
-
 
 	db::save_suggestion(
 		pool,
