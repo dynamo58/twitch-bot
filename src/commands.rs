@@ -49,8 +49,6 @@ pub async fn handle_command(
 		_ => Ok(None),
 	};
 
-	
-
 	let cmd_out = match cmd_out {
 		Ok(content) => content,
 		Err(e)      => {

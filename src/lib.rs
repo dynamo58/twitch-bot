@@ -6,9 +6,11 @@ pub mod api_models;
 use std::collections::HashMap;
 use std::path::Path;
 
+use colored::*;
 use chrono::{DateTime, Utc};
 use serde::{Serialize, Deserialize};
 use thiserror::Error;
+
 
 // some custom errors (ad hoc)
 #[derive(Error, Debug)]
@@ -71,6 +73,8 @@ pub enum TwitchStatus {
 	Subscriber,
 	Vip,
 	Premium,
+	GlitchCon2020,
+	Unrecognized,
 }
 
 #[derive(Clone)]
@@ -113,7 +117,16 @@ impl CommandSource {
 			"subscriber"  => TwitchStatus::Subscriber,
 			"vip"         => TwitchStatus::Vip,
 			"premium"     => TwitchStatus::Premium,
-			_ => {println!("{}", badge.name); unreachable!()}
+			"glitchcon2020" => TwitchStatus::GlitchCon2020,
+			_ => {
+				println!(
+					"{} Encountered unrecognized badge: {}",
+					"WARN   ".bright_red().bold(),
+					badge.name.bold()
+				);
+				
+				TwitchStatus::Unrecognized
+			}
 		})
 		.collect();
 
