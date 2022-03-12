@@ -91,7 +91,7 @@ pub async fn log(
 // processes message for markov index table entries
 pub async fn log_markov(
     pool: &SqlitePool,
-    privmsg: &twitch_irc::message::PrivmsgMessage
+    privmsg: &twitch_irc::message::PrivmsgMessage,
 ) -> anyhow::Result<()> {
 	let mut conn = pool.acquire().await?;
 
@@ -107,6 +107,8 @@ pub async fn log_markov(
 			Ok(a) => a,
 			Err(_) => return Ok(()),
 		};
+
+		
 
         if let (Some(w), Some(s)) = (word, succ) {
             let sql = r#"
@@ -229,7 +231,7 @@ fn format_markov_entry(s: &str)
     if out.contains("⠀") || out.contains("//") || out.contains("www.") || out == "".to_string() { 
         Ok(None)
     } else {
-        Ok(Some(out.to_lowercase()))
+        Ok(Some(out))
     }
 }
 

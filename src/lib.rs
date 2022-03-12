@@ -10,6 +10,7 @@ use colored::*;
 use chrono::{DateTime, Utc};
 use serde::{Serialize, Deserialize};
 use thiserror::Error;
+use twitch_irc::message::PrivmsgMessage;
 
 
 // some custom errors (ad hoc)
@@ -142,3 +143,85 @@ impl CommandSource {
 }
 
 pub type NameIdCache = HashMap<String, i32>;
+
+#[derive(Clone)]
+pub struct EmoteCache {
+	// channels the bot is joined to
+	// with the emotes they have enabled (7tv, bttv, ffz)
+	channels: HashMap<String, Vec<String>>,
+	// 7tv, bttv and ffz global emotes
+	globals: Vec<String>,
+	// all the other Twitch emotes (globals and channel emotes)
+	// have to be processed from the Privmsg directly
+}
+
+impl EmoteCache {
+	pub async fn init(
+		config: &Config,
+		auth:   &TwitchAuth,
+	) -> anyhow::Result<Self> {
+		let mut channels: HashMap<String, Vec<String>> = HashMap::new();
+		let mut globals: Vec<String> = vec![];
+
+		for channel_name in &config.channels {
+			let channel_id = api::id_from_nick(channel_name, &auth)
+				.await?
+				.ok_or(MyError::NotFound)?;
+
+			let mut channel_emotes = vec![];
+
+			api::get_7tv_channel_emotes(channel_name)
+				.await?
+				.ok_or(MyError::NotFound)?
+				.iter().for_each(|emote_name| channel_emotes.push(emote_name.to_owned()));
+
+			api::get_bttv_channel_emotes(channel_id)
+				.await?
+				.ok_or(MyError::NotFound)?
+				.iter().for_each(|emote_name| channel_emotes.push(emote_name.to_owned()));
+
+			api::get_ffz_channel_emotes(channel_id)
+				.await?
+				.ok_or(MyError::NotFound)?
+				.iter().for_each(|emote_name| channel_emotes.push(emote_name.to_owned()));
+			
+			channels.insert(channel_name.to_string(), channel_emotes);
+		}
+
+		api::get_7tv_global_emotes()
+			.await?
+			.ok_or(MyError::NotFound)?
+			.iter().for_each(|emote_name| globals.push(emote_name.to_owned()));
+
+		api::get_bttv_global_emotes()
+			.await?
+			.ok_or(MyError::NotFound)?
+			.iter().for_each(|emote_name| globals.push(emote_name.to_owned()));
+
+		api::get_ffz_global_emotes()
+			.await?
+			.ok_or(MyError::NotFound)?
+			.iter().for_each(|emote_name| globals.push(emote_name.to_owned()));
+
+		Ok(Self {
+			channels,
+			globals,
+		})
+	}
+
+	pub fn is_emote(
+		&self,
+		privmsg:      &PrivmsgMessage,
+		channel_name: String,
+		emote_name:   String,
+	) -> bool {
+		let channel_emotes = match self.channels.get(&channel_name) {
+			Some(emotes) => emotes,
+			None => return false,
+		};
+
+		channel_emotes.contains(&emote_name) ||
+		self.globals.contains(&emote_name) ||
+		privmsg.emotes.iter().map(|emote| emote.code.to_owned()).collect::<String>().contains(&emote_name)
+	}
+}

@@ -108,10 +108,215 @@ pub struct Pagination {
 }
 
 // —————————————————————————————————————————
+//               Twitch-related APIs
+// —————————————————————————————————————————
+
+pub type Emotes7TVResponse = Vec<Root2>;
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Root2 {
+    pub id: String,
+    pub name: String,
+    pub owner: Owner,
+    pub visibility: i64,
+    #[serde(rename = "visibility_simple")]
+    pub visibility_simple: Vec<String>,
+    pub mime: String,
+    pub status: i64,
+    pub tags: Vec<String>,
+    pub width: Vec<i64>,
+    pub height: Vec<i64>,
+    pub urls: Vec<Vec<String>>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Owner {
+    pub id: String,
+    #[serde(rename = "twitch_id")]
+    pub twitch_id: String,
+    pub login: String,
+    #[serde(rename = "display_name")]
+    pub display_name: String,
+    pub role: Role,
+    #[serde(rename = "profile_picture_id")]
+    pub profile_picture_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Role {
+    pub id: String,
+    pub name: String,
+    pub position: i64,
+    pub color: i64,
+    pub allowed: i64,
+    pub denied: i64,
+    pub default: Option<bool>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EmotesBttvResponse {
+    pub id: String,
+    pub bots: Vec<String>,
+    pub avatar: String,
+    pub channel_emotes: Vec<ChannelEmote>,
+    pub shared_emotes: Vec<SharedEmote>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChannelEmote {
+    pub id: String,
+    pub code: String,
+    pub image_type: String,
+    pub user_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SharedEmote {
+    pub id: String,
+    pub code: String,
+    pub image_type: String,
+    pub user: User,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct User {
+    pub id: String,
+    pub name: String,
+    pub display_name: String,
+    pub provider_id: String,
+}
+
+pub type EmotesFfzResponse = Vec<Root2Ffz>;
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Root2Ffz {
+    pub id: i64,
+    pub user: UserFfz,
+    pub code: String,
+    pub images: Images,
+    pub image_type: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserFfz {
+    pub id: i64,
+    pub name: String,
+    pub display_name: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Images {
+    #[serde(rename = "1x")]
+    pub n1x: String,
+    #[serde(rename = "2x")]
+    pub n2x: String,
+    #[serde(rename = "4x")]
+    pub n4x: String,
+}
+
+pub type GlobalEmotes7TVResponse = Vec<Root2Globals>;
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Root2Globals {
+    pub id: String,
+    pub name: String,
+    pub owner: OwnerGlobals,
+    pub visibility: i64,
+    #[serde(rename = "visibility_simple")]
+    pub visibility_simple: Vec<String>,
+    pub mime: String,
+    pub status: i64,
+    pub tags: Vec<String>,
+    pub width: Vec<i64>,
+    pub height: Vec<i64>,
+    pub urls: Vec<Vec<String>>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OwnerGlobals {
+    pub id: String,
+    #[serde(rename = "twitch_id")]
+    pub twitch_id: String,
+    pub login: String,
+    #[serde(rename = "display_name")]
+    pub display_name: String,
+    pub role: RoleGlobals,
+    #[serde(rename = "profile_picture_id")]
+    pub profile_picture_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RoleGlobals {
+    pub id: String,
+    pub name: String,
+    pub position: i64,
+    pub color: i64,
+    pub allowed: i64,
+    pub denied: i64,
+    pub default: Option<bool>,
+}
+
+pub type GlobalEmotesBttvResponse = Vec<Root2GlobalsBttv>;
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Root2GlobalsBttv {
+    pub id: String,
+    pub code: String,
+    pub image_type: String,
+    pub user_id: String,
+}
+
+pub type GlobalEmotesFfzResponse = Vec<Root2FfzGlobals>;
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Root2FfzGlobals {
+    pub id: i64,
+    pub user: UserFfzGlobals,
+    pub code: String,
+    pub images: ImagesFfzGlobals,
+    pub image_type: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserFfzGlobals {
+    pub id: i64,
+    pub name: String,
+    pub display_name: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImagesFfzGlobals {
+    #[serde(rename = "1x")]
+    pub n1x: String,
+    #[serde(rename = "2x")]
+    pub n2x: Option<String>,
+    #[serde(rename = "4x")]
+    pub n4x: Option<String>,
+}
+
+
+// —————————————————————————————————————————
 //               Other APIs
 // —————————————————————————————————————————
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WttrInResponse {
     #[serde(rename = "current_condition")]
@@ -122,7 +327,7 @@ pub struct WttrInResponse {
     pub weather: Vec<Weather>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CurrentCondition {
     #[serde(rename = "FeelsLikeC")]
@@ -156,25 +361,25 @@ pub struct CurrentCondition {
     pub windspeed_miles: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LangC {
     pub value: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WeatherDesc {
     pub value: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WeatherIconUrl {
     pub value: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NearestArea {
     pub area_name: Vec<AreaName>,
@@ -186,31 +391,31 @@ pub struct NearestArea {
     pub weather_url: Vec<WeatherUrl>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AreaName {
     pub value: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Country {
     pub value: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Region {
     pub value: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WeatherUrl {
     pub value: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Request {
     pub query: String,
@@ -218,7 +423,7 @@ pub struct Request {
     pub type_field: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Weather {
     pub astronomy: Vec<Astronomy>,
@@ -236,7 +441,7 @@ pub struct Weather {
     pub uv_index: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Astronomy {
     #[serde(rename = "moon_illumination")]
@@ -249,7 +454,7 @@ pub struct Astronomy {
     pub sunset: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Hourly {
     #[serde(rename = "DewPointC")]
@@ -305,19 +510,19 @@ pub struct Hourly {
     pub windspeed_miles: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LangC2 {
     pub value: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WeatherDesc2 {
     pub value: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WeatherIconUrl2 {
     pub value: String,

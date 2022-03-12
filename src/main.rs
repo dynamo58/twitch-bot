@@ -3,12 +3,13 @@ mod commands;
 mod api;
 mod api_models;
 
-use twitch_bot::{Config, CommandSource, MyError, TwitchAuth, NameIdCache};
+use twitch_bot::{Config, CommandSource, MyError, TwitchAuth, NameIdCache, EmoteCache};
 use commands::handle_command;
 
 use std::sync::{Arc, Mutex};
 
 use colored::*;
+use chrono::Local;
 use dotenv::dotenv;
 use sqlx::sqlite::SqlitePool;
 use tokio_cron_scheduler::{JobScheduler, Job};
@@ -30,33 +31,6 @@ async fn main() -> anyhow::Result<()> {
 	
 	// init tracing subscriber
 	// tracing_subscriber::fmt::init();
-	
-	// this will hold cached names and ids of users
-	// to prevent flooding the Twitch API too much
-	let name_id_cache = Arc::new(Mutex::new(NameIdCache::new()));
-	let cache_arc = name_id_cache.clone();
-	
-	// holding on to the ids forever would be dumb;
-	// it would make the amount of memory used
-	// go up indefinitely during runtime + 
-	// one might as well not use ids for user
-	// identification at all and go by names instead
-	// therefore the cache is to be cleared
-	// every, say, 5 minutes
-	let mut sched = JobScheduler::new();
-
-	// the format of these is as follows:
-	// sec   min   hour   day of month   month   day of week   year
-	// *     *     *      *              *       *             *
-	sched.add(Job::new("0 1/15 * * * *", move |_, _| {
-        if let Ok(mut cache) = cache_arc.lock() {
-			(*cache).clear();
-			println!("{}   Cleared name-id cache", "INFO   ".blue().bold());
-        };
-    }).unwrap())
-		.expect(&format!("{}   Setting up a scheduled task failed, but why?", "ERROR  ".red().bold()));
-
-	println!("{}   Set up scheduled tasks", "INFO   ".blue().bold());
 
 	// load all of the credentials and configurations
 	let config = Config::from_config_file()
@@ -65,6 +39,66 @@ async fn main() -> anyhow::Result<()> {
 		.expect(&format!("{}   Couldn't load Twitch credentials from .env", "ERROR  ".red().bold()));
 
 	println!("{}   Obtained credentials and config from local files", "INFO   ".blue().bold());
+	
+	// this will hold cached names and ids of users
+	// to prevent flooding the Twitch API too much
+	let name_id_cache = Arc::new(Mutex::new(NameIdCache::new()));
+	let name_id_cache_arc = name_id_cache.clone();
+	
+	let emote_cache = Arc::new(Mutex::new({
+		EmoteCache::init(&config, &auth).await
+			.expect(&format!("{}   Failed to obtain emote cache, aborting.", "ERROR  ".red().bold()))
+	}));
+	let emote_cache_arc = emote_cache.clone();
+
+	// holding on to the data forever would be dumb;
+	// it would make the amount of memory used
+	// go up indefinitely during runtime + 
+	// in the case of name-id cache,
+	// one might as well not use ids for user
+	// identification at all and go by names instead;
+	// therefore the cache is to be cleared
+	// every now and then
+	let mut sched = JobScheduler::new();
+
+	// the format of these is as follows:
+	// sec   min   hour   day of month   month   day of week   year
+	// *     *     *      *              *       *             *
+	sched.add(Job::new("0 1/15 * * * *", move |_, _| {
+        if let Ok(mut cache) = name_id_cache_arc.lock() {
+			let num = cache.len();
+			(*cache).clear();
+			println!("{}   Cleared name-id cache ({} items)", "INFO   ".blue().bold(), num);
+        }
+    }).unwrap())
+		.expect(&format!("{}   Setting up a scheduled task failed, but why?", "ERROR  ".red().bold()));
+	
+	sched.add(Job::new_async("0 1/15 * * * *", move |_, _| {
+		Box::pin(async move {
+		if let Ok(mut cache) = emote_cache_arc.lock() {
+			match EmoteCache::init(&config, &auth).await {
+				Ok(new_cache) => {
+					*cache = new_cache;
+					println!(
+						"{}   Renewed the emote cache",
+						"INFO   ".blue().bold()
+					);
+				},
+				Err(_) => println!(
+					"{}   Couldn't renew emote cache, keeping it the same",
+					"ERROR  ".red().bold()
+				),
+			}
+		}})
+	}).unwrap())
+		.expect(&format!(
+			"{}   Setting up a scheduled task failed, but why?",
+			"ERROR  ".red().bold())
+		);
+
+	println!("{}   Set up scheduled tasks", "INFO   ".blue().bold());
+
+	
 
 	// instantiate database connection pool
     let pool = SqlitePool::connect(DB_PATH)
@@ -114,13 +148,14 @@ async fn main() -> anyhow::Result<()> {
 		tokio::spawn(async move {
 			// capture incoming messages
 			while let Some(message) = incoming_messages.recv().await {
+				dbg!(&message);
 				// privmsg == chat message
 				if let ServerMessage::Privmsg(privmsg) = message {
-					
+
 					if config.disregarded_users.contains(&privmsg.sender.login) {
 						continue;
 					}
-					
+
 					// log chat messages into database
 					// (messages by the bot itself are not here,
 					//	, so that's taken care off)
@@ -128,7 +163,7 @@ async fn main() -> anyhow::Result<()> {
 						Ok(_) => (),
 						Err(e) => println!("{}   Uncaught error; message: {e}", "ERROR    ".red().bold()),
 					};
-	
+
 					// check if user has any reminders set for him
 					let reminders = 
 						db::check_for_reminders(
@@ -172,7 +207,13 @@ async fn main() -> anyhow::Result<()> {
 		})
 	};
 
-	println!("{}   Bot is now running!", "SUCCESS".green().bold());
+	let t = format!("{}", Local::now());
+	println!(
+		"{}   Bot is now running!\n          Local time is {}",
+		"SUCCESS".green().bold(),
+		&t[..t.len()-17]
+	);
+	std::mem::drop(t);
 	sched.start().await.unwrap();
     message_listener_handle.await.unwrap();
     Ok(())
