@@ -144,6 +144,7 @@ impl CommandSource {
 
 pub type NameIdCache = HashMap<String, i32>;
 
+
 #[derive(Clone)]
 pub struct EmoteCache {
 	// channels the bot is joined to
@@ -155,6 +156,7 @@ pub struct EmoteCache {
 	// have to be processed from the Privmsg directly
 }
 
+
 impl EmoteCache {
 	pub async fn init(
 		config: &Config,
@@ -162,30 +164,18 @@ impl EmoteCache {
 	) -> anyhow::Result<Self> {
 		let mut channels: HashMap<String, Vec<String>> = HashMap::new();
 		let mut globals: Vec<String> = vec![];
-
+		
 		for channel_name in &config.channels {
 			let channel_id = api::id_from_nick(channel_name, &auth)
 				.await?
 				.ok_or(MyError::NotFound)?;
-
-			let mut channel_emotes = vec![];
-
-			api::get_7tv_channel_emotes(channel_name)
-				.await?
-				.ok_or(MyError::NotFound)?
-				.iter().for_each(|emote_name| channel_emotes.push(emote_name.to_owned()));
-
-			api::get_bttv_channel_emotes(channel_id)
-				.await?
-				.ok_or(MyError::NotFound)?
-				.iter().for_each(|emote_name| channel_emotes.push(emote_name.to_owned()));
-
-			api::get_ffz_channel_emotes(channel_id)
-				.await?
-				.ok_or(MyError::NotFound)?
-				.iter().for_each(|emote_name| channel_emotes.push(emote_name.to_owned()));
 			
-			channels.insert(channel_name.to_string(), channel_emotes);
+			let channel_emotes = api::get_all_channel_emotes(channel_id)
+				.await?;
+			
+			if let Some(emotes) = channel_emotes {
+				channels.insert(channel_name.to_string(), emotes);
+			}
 		}
 
 		api::get_7tv_global_emotes()
@@ -209,7 +199,7 @@ impl EmoteCache {
 		})
 	}
 
-	pub fn is_emote(
+	pub fn has_emote(
 		&self,
 		privmsg:      &PrivmsgMessage,
 		channel_name: String,
@@ -223,5 +213,28 @@ impl EmoteCache {
 		channel_emotes.contains(&emote_name) ||
 		self.globals.contains(&emote_name) ||
 		privmsg.emotes.iter().map(|emote| emote.code.to_owned()).collect::<String>().contains(&emote_name)
+	}
+
+	pub async fn renew(
+		&mut self,
+		config: &Config,
+		auth: &TwitchAuth,
+	) -> anyhow::Result<()> {
+		match Self::init(&config, &auth).await {
+			Ok(new_cache) => {
+				self.channels = new_cache.channels;
+				self.globals = new_cache.globals;
+				println!(
+					"{}   Renewed the emote cache.",
+					"INFO   ".blue().bold()
+				);
+			},
+			Err(_) => println!(
+				"{}   Couldn't renew emote cache, keeping it the same.",
+				"ERROR  ".red().bold()
+			),
+		}
+
+		Ok(())
 	}
 }

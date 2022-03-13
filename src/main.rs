@@ -7,10 +7,10 @@ use twitch_bot::{Config, CommandSource, MyError, TwitchAuth, NameIdCache, EmoteC
 use commands::handle_command;
 
 use std::sync::{Arc, Mutex};
-
 use colored::*;
 use chrono::Local;
 use dotenv::dotenv;
+use tokio::{self, sync::Mutex as TokioMutex};
 use sqlx::sqlite::SqlitePool;
 use tokio_cron_scheduler::{JobScheduler, Job};
 // use tracing::{info, error, warn};
@@ -45,11 +45,13 @@ async fn main() -> anyhow::Result<()> {
 	let name_id_cache = Arc::new(Mutex::new(NameIdCache::new()));
 	let name_id_cache_arc = name_id_cache.clone();
 	
-	let emote_cache = Arc::new(Mutex::new({
-		EmoteCache::init(&config, &auth).await
-			.expect(&format!("{}   Failed to obtain emote cache, aborting.", "ERROR  ".red().bold()))
+	let emote_cache = Arc::new(TokioMutex::new({
+		match EmoteCache::init(&config, &auth).await {
+			Ok(e) => e,
+			Err(e) => panic!("{}", e),
+		}
+			
 	}));
-	let emote_cache_arc = emote_cache.clone();
 
 	// holding on to the data forever would be dumb;
 	// it would make the amount of memory used
@@ -73,29 +75,28 @@ async fn main() -> anyhow::Result<()> {
     }).unwrap())
 		.expect(&format!("{}   Setting up a scheduled task failed, but why?", "ERROR  ".red().bold()));
 	
-	sched.add(Job::new_async("0 1/15 * * * *", move |_, _| {
-		Box::pin(async move {
-		if let Ok(mut cache) = emote_cache_arc.lock() {
-			match EmoteCache::init(&config, &auth).await {
-				Ok(new_cache) => {
-					*cache = new_cache;
-					println!(
-						"{}   Renewed the emote cache",
-						"INFO   ".blue().bold()
-					);
-				},
-				Err(_) => println!(
-					"{}   Couldn't renew emote cache, keeping it the same",
-					"ERROR  ".red().bold()
-				),
-			}
-		}})
-	}).unwrap())
-		.expect(&format!(
-			"{}   Setting up a scheduled task failed, but why?",
-			"ERROR  ".red().bold())
-		);
+	let c = config.clone();
+	let a = auth.clone();
+	let cachee = emote_cache.clone();
+	
+	// I just fucking cannot get this shit to work
+	// I do not know how
+	// and it is pissing me the fuck off
+	// I want to kms
+	
+	// sched.add(Job::new("1/7 * * * * *", move |_, _| {
+	// 		tokio::spawn(async move {
+	// 			let c = config.clone();
+	// 			let a = auth.clone();
+	// 			let cachee = emote_cache.clone();
 
+	// 			let mut lock = cachee.lock().await;
+	// 			lock.renew(&c, &a).await.unwrap();
+	// 		});
+	// 	println!("{}   Renewed emote cache", "INFO   ".blue().bold());
+	// }).unwrap())
+	// 	.expect(&format!("{}   Setting up a scheduled task failed, but why?", "ERROR  ".red().bold()));
+	
 	println!("{}   Set up scheduled tasks", "INFO   ".blue().bold());
 
 	
@@ -148,7 +149,6 @@ async fn main() -> anyhow::Result<()> {
 		tokio::spawn(async move {
 			// capture incoming messages
 			while let Some(message) = incoming_messages.recv().await {
-				dbg!(&message);
 				// privmsg == chat message
 				if let ServerMessage::Privmsg(privmsg) = message {
 

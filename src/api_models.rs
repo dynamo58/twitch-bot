@@ -193,21 +193,25 @@ pub struct User {
     pub provider_id: String,
 }
 
-pub type EmotesFfzResponse = Vec<Root2Ffz>;
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EmotesFfzResponse {
+    pub resp: Vec<Resp>,
+}
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Root2Ffz {
+pub struct Resp {
     pub id: i64,
-    pub user: UserFfz,
+    pub user: User_,
     pub code: String,
-    pub images: Images,
+    pub images: Images_,
     pub image_type: String,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct UserFfz {
+pub struct User_ {
     pub id: i64,
     pub name: String,
     pub display_name: String,
@@ -215,13 +219,30 @@ pub struct UserFfz {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Images {
+pub struct Images_ {
     #[serde(rename = "1x")]
     pub n1x: String,
     #[serde(rename = "2x")]
-    pub n2x: String,
+    pub n2x: Option<String>,
     #[serde(rename = "4x")]
-    pub n4x: String,
+    pub n4x: Option<String>,
+}
+
+pub type ChannelEmotesResponse = Vec<Root2___>;
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Root2___ {
+    pub provider: i64,
+    pub code: String,
+    pub urls: Vec<Url>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Url {
+    pub size: String,
+    pub url: String,
 }
 
 pub type GlobalEmotes7TVResponse = Vec<Root2Globals>;

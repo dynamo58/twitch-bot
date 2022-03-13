@@ -218,11 +218,13 @@ pub async fn get_ffz_channel_emotes<T: Display>(
         .text()
         .await?;
 
+    let res = format!("{{\"resp\": {res}}}");
+    println!("{res:#?}");
     let parsed: models::EmotesFfzResponse = serde_json::from_str(&res)?;
 
-    match parsed.len() {
+    match parsed.resp.len() {
         0 => return Ok(None),
-        _ => return Ok(Some(parsed.iter().map(|emote| emote.code.to_owned()).collect())),
+        _ => return Ok(Some(parsed.resp.iter().map(|emote| emote.code.to_owned()).collect())),
     }
 }
 
@@ -245,6 +247,29 @@ pub async fn get_ffz_global_emotes(
         _ => return Ok(Some(parsed.iter().map(|emote| emote.code.to_owned()).collect())),
     }
 }
+
+// fetches all channel emotes
+pub async fn get_all_channel_emotes<T: Display>(
+    channel_id: T
+) -> anyhow::Result<Option<Vec<String>>> {
+    let client = Client::new();
+
+    let res = client
+        .get(&format!("https://emotes.adamcy.pl/v1/channel/{channel_id}/emotes/all"))
+        .send()
+        .await?
+        .text()
+        .await?;
+
+    let parsed: models::ChannelEmotesResponse = serde_json::from_str(&res)?;
+
+    match parsed.len() {
+        0 => return Ok(None),
+        _ => return Ok(Some(parsed.iter().map(|emote| emote.code.to_owned()).collect())),
+    }
+}
+
+
 
 // https://dev.twitch.tv/docs/api/reference#get-users-follows
 
