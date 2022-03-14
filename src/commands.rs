@@ -40,7 +40,7 @@ pub async fn handle_command(
 		"weather"        => get_weather_report(&cmd.args).await,
 		"clearreminders" => clear_reminders(&pool, cmd.sender.id).await,
 		"rmrm"           => clear_reminders(&pool, cmd.sender.id).await,
-		"rose"           => tag_rand_chatter_with_rose(&cmd.channel).await,
+		"rose"           => tag_rand_chatter_with_rose(&cmd.channel, &config.disregarded_users).await,
 		"first"          => first_message(&pool, &auth, cache_arc, &cmd).await,
 		"remindme"       => add_reminder(&pool, &auth, cache_arc, &cmd, true).await,
 		"remind"         => add_reminder(&pool, &auth, cache_arc, &cmd, false).await,
@@ -366,14 +366,23 @@ pub async fn suggest(
 
 pub async fn tag_rand_chatter_with_rose(
 	channel_name: &str,
+	disregarded_users: &Vec<String>,
 ) -> anyhow::Result<Option<String>> {
 	let chatters = match api::get_chatters(channel_name).await? {
 		Some(chatters) => chatters,
 		None           => return Ok(Some("❌ no users in the chatroom".into())),
 	};
 
-	let rand_chatter = chatters[rand::thread_rng().gen_range(0..chatters.len())].clone();
+	let mut rand_chatter = "".to_string();
 
+	while rand_chatter.len() == 0 {
+		let try_rand_chatter = chatters[rand::thread_rng().gen_range(0..chatters.len())].clone();
+	
+		if !disregarded_users.contains(&try_rand_chatter) {
+			rand_chatter = try_rand_chatter;
+		}
+	}
+	
 	Ok(Some(format!("@{rand_chatter} PeepoGlad 🌹")))
 }
 
@@ -423,5 +432,5 @@ pub async fn get_uptime(
 
 	formatted.push_str(&format!("{secs} secs"));
 
-	Ok(Some(format!("⏱️ {} has been live for {}", channel, formatted)))
+	Ok(Some(format!("⏱️ {channel} has been live for {formatted}")))
 }

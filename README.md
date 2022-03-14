@@ -1,6 +1,13 @@
 # About
 
-A simple Twitch bot in Rust with quite specific features.
+A simple sophisticated Twitch bot in Rust.
+
+## Underlying technologies
+- Rust
+	- twitch-irc
+		- used as a twitch irc client
+	- sqlx
+		- used as a SQLite database driver
 
 # Commands
 
@@ -29,3 +36,10 @@ A simple Twitch bot in Rust with quite specific features.
 3. tweak your config in `assets/config.json`
 4. create a blank `db.db` file in the root
 5. everything set up, you can do `cargo run` or something
+
+
+# Credits
+
+This bot is heavily inspired by other Twitch bots, takes some of their features and in some cases tries to build on top of them. Those are, most notably
+
+- [Supibot](https://github.com/Supinic/supibot): a Twitch bot made by [Supinic](https://www.twitch.tv/supinic)
