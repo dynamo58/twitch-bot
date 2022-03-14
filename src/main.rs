@@ -75,27 +75,12 @@ async fn main() -> anyhow::Result<()> {
     }).unwrap())
 		.expect(&format!("{}   Setting up a scheduled task failed, but why?", "ERROR  ".red().bold()));
 	
-	// I just fucking cannot get this shit to work
-	// I do not know how
-	// and it is pissing me the fuck off
-	// I want to kms
-	
-	// sched.add(Job::new("1/7 * * * * *", move |_, _| {
-	// 		tokio::spawn(async move {
-	// 			let c = config.clone();
-	// 			let a = auth.clone();
-	// 			let cachee = emote_cache.clone();
-
-	// 			let mut lock = cachee.lock().await;
-	// 			lock.renew(&c, &a).await.unwrap();
-	// 		});
-	// 	println!("{}   Renewed emote cache", "INFO   ".blue().bold());
-	// }).unwrap())
-	// 	.expect(&format!("{}   Setting up a scheduled task failed, but why?", "ERROR  ".red().bold()));
+	// I was extensively trying to get the emote cache
+	// to renew periodically via the tokio_cron_scheduler
+	// API, but I could not figure it out, so I will leave
+	// it blank for now....................................
 	
 	println!("{}   Set up scheduled tasks", "INFO   ".blue().bold());
-
-	
 
 	// instantiate database connection pool
     let pool = SqlitePool::connect(DB_PATH)
@@ -195,7 +180,7 @@ async fn main() -> anyhow::Result<()> {
 					} else {
 						// index for markov if enabled by config
 						if config.index_markov {
-							db::log_markov(&pool, &privmsg).await.unwrap();
+							db::log_markov(&pool, &emote_cache, &privmsg).await.unwrap();
 						}
 					}
 				}

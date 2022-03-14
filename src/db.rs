@@ -1,11 +1,9 @@
+use crate::{MyError, EmoteCache};
+
 use rand::{self, Rng};
-
 use chrono::{DateTime, Utc};
-
 use sqlx::sqlite::SqlitePool;
 use sqlx::Sqlite;
-
-use crate::MyError;
 
 // QR == query result
 #[derive(sqlx::FromRow)]
@@ -91,6 +89,7 @@ pub async fn log(
 // processes message for markov index table entries
 pub async fn log_markov(
     pool: &SqlitePool,
+	emote_cache: &EmoteCache,
     privmsg: &twitch_irc::message::PrivmsgMessage,
 ) -> anyhow::Result<()> {
 	let mut conn = pool.acquire().await?;
@@ -99,16 +98,14 @@ pub async fn log_markov(
 
 	// process each word (besides the last one)
 	for idx in 0..words.len()-1 {
-		let word = match format_markov_entry(words[idx]) {
+		let word = match format_markov_entry(&emote_cache, words[idx]) {
 			Ok(a) => a,
 			Err(_) => return Ok(()),
 		};
-		let succ = match format_markov_entry(words[idx + 1]) {
+		let succ = match format_markov_entry(&emote_cache, words[idx + 1]) {
 			Ok(a) => a,
 			Err(_) => return Ok(()),
 		};
-
-		
 
         if let (Some(w), Some(s)) = (word, succ) {
             let sql = r#"
@@ -178,8 +175,10 @@ pub async fn check_for_reminders(
 
 // format the words parsed from the message into format
 // acceptible for the db entry
-fn format_markov_entry(s: &str)
--> anyhow::Result<Option<String>> {
+fn format_markov_entry(
+	emote_cache: &EmoteCache,
+	s: &str,
+) -> anyhow::Result<Option<String>> {
     let mut out = s.to_owned();
     let invalid_front_chars = vec![
 		'"',
@@ -231,7 +230,11 @@ fn format_markov_entry(s: &str)
     if out.contains("⠀") || out.contains("//") || out.contains("www.") || out == "".to_string() { 
         Ok(None)
     } else {
-        Ok(Some(out))
+		match emote_cache.self_or_privmsg_has_emote(&privmsg, out) {
+			true  => return Ok(Some(out)),
+			false => return Ok(Some(out.to_lowercase()))
+		}
+        
     }
 }
 

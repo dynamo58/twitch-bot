@@ -199,12 +199,12 @@ impl EmoteCache {
 		})
 	}
 
-	pub fn has_emote(
+	pub fn self_or_privmsg_has_emote(
 		&self,
 		privmsg:      &PrivmsgMessage,
-		channel_name: String,
 		emote_name:   String,
 	) -> bool {
+		let channel_name = privmsg.source.params[0][1..];
 		let channel_emotes = match self.channels.get(&channel_name) {
 			Some(emotes) => emotes,
 			None => return false,
