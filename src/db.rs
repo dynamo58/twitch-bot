@@ -270,7 +270,8 @@ pub async fn get_rand_markov_succ(
 		SELECT succ
 			FROM {{ CHANNEL_NAME }}_MARKOV
 			WHERE
-				word=$1;
+				word=$1
+			COLLATE NOCASE;
 	"#.replace("{{ CHANNEL_NAME }}", channel);
 
 	let succs: Vec<String> = sqlx::query_as::<Sqlite, StringQR>(&sql)

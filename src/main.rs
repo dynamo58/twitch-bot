@@ -75,10 +75,6 @@ async fn main() -> anyhow::Result<()> {
     }).unwrap())
 		.expect(&format!("{}   Setting up a scheduled task failed, but why?", "ERROR  ".red().bold()));
 	
-	let c = config.clone();
-	let a = auth.clone();
-	let cachee = emote_cache.clone();
-	
 	// I just fucking cannot get this shit to work
 	// I do not know how
 	// and it is pissing me the fuck off

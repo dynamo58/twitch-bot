@@ -263,8 +263,8 @@ async fn markov(
 		}
 	}
 
-	let mut output: Vec<String> = vec![cmd.args[0].clone().to_lowercase()];
-	let mut seed: String = cmd.args[0].clone().to_lowercase();
+	let mut output: Vec<String> = vec![cmd.args[0].clone()];
+	let mut seed: String = cmd.args[0].clone();
 
 	for _ in 0..rounds-1 {
 		let succ = match db::get_rand_markov_succ(pool, &cmd.channel, &seed).await {
