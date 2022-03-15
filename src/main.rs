@@ -180,7 +180,7 @@ async fn main() -> anyhow::Result<()> {
 					} else {
 						// index for markov if enabled by config
 						if config.index_markov {
-							db::log_markov(&pool, emote_cache_arc.clone(), &privmsg).await.unwrap();
+							db::log_markov(&pool, &emote_cache_arc, &privmsg).await.unwrap();
 						}
 					}
 				}

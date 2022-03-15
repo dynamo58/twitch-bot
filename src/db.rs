@@ -93,40 +93,46 @@ pub async fn log(
 // processes message for markov index table entries
 pub async fn log_markov(
     pool: &SqlitePool,
-	emote_cache_arc: Arc<Mutex<EmoteCache>>,
+	emote_cache_arc: &Arc<Mutex<EmoteCache>>,
     privmsg: &twitch_irc::message::PrivmsgMessage,
 ) -> anyhow::Result<()> {
 	let mut conn = pool.acquire().await?;
 
 	let words = privmsg.message_text.split(' ').collect::<Vec<&str>>();
 
+	// this is kinda tacky but I couldn't get it working otherwise, so idk
+	let emote_cache;
+	if let Ok(cache) = emote_cache_arc.lock() {
+		emote_cache = cache.clone();
+	} else {
+		return Ok(());
+	}
+
 	// process each word (besides the last one)
 	for idx in 0..words.len()-1 {
-		if let Ok(cache) = emote_cache_arc.lock() {
-			let word = match format_markov_entry(&privmsg, &*cache, words[idx]) {
-				Ok(a) => a,
-				Err(_) => return Ok(()),
-			};
-			let succ = match format_markov_entry(&privmsg, &*cache, words[idx + 1]) {
-				Ok(a) => a,
-				Err(_) => return Ok(()),
-			};
-	
-			if let (Some(w), Some(s)) = (word, succ) {
-				let sql = r#"
-					INSERT 
-						INTO {{ CHANNEL_NAME }}_MARKOV
-							(word, succ) 
-						VALUES
-							($1, $2);
-				"#.replace("{{ CHANNEL_NAME }}", &privmsg.source.params[0][1..].to_owned());
-					
-				sqlx::query::<Sqlite>(&sql)
-					.bind(w)
-					.bind(s)
-					.execute(&mut *conn)
-					.await?;
-			}
+		let word = match format_markov_entry(&privmsg, &emote_cache, words[idx]) {
+			Ok(a) => a,
+			Err(_) => return Ok(()),
+		};
+		let succ = match format_markov_entry(&privmsg, &emote_cache, words[idx + 1]) {
+			Ok(a) => a,
+			Err(_) => return Ok(()),
+		};
+
+		if let (Some(w), Some(s)) = (word, succ) {
+			let sql = r#"
+				INSERT 
+					INTO {{ CHANNEL_NAME }}_MARKOV
+						(word, succ) 
+					VALUES
+						($1, $2);
+			"#.replace("{{ CHANNEL_NAME }}", &privmsg.source.params[0][1..].to_owned());
+				
+			sqlx::query::<Sqlite>(&sql)
+				.bind(w)
+				.bind(s)
+				.execute(&mut *conn)
+				.await?;
 		}
 	}
 

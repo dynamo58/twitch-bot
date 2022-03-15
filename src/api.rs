@@ -3,7 +3,7 @@ use crate::api_models as models;
 
 use std::fmt::Display;
 
-use chrono::DateTime;
+use chrono::{DateTime, Utc};
 use reqwest::Client;
 
 
@@ -45,7 +45,7 @@ pub async fn id_from_nick(
 pub async fn get_acc_creation_date(
     nick: &str,
     auth: &TwitchAuth,
-) -> anyhow::Result<DateTime> {
+) -> anyhow::Result<Option<DateTime<Utc>>> {
     match get_twitch_user(&nick, &auth).await?.data.get(0) {
         Some(data) => return Ok(Some(data.created_at)),
         None       => return Ok(None),

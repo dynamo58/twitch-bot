@@ -149,9 +149,9 @@ pub type NameIdCache = HashMap<String, i32>;
 pub struct EmoteCache {
 	// channels the bot is joined to
 	// with the emotes they have enabled (7tv, bttv, ffz)
-	channels: HashMap<String, Vec<String>>,
+	pub channels: HashMap<String, Vec<String>>,
 	// 7tv, bttv and ffz global emotes
-	globals: Vec<String>,
+	pub globals: Vec<String>,
 	// all the other Twitch emotes (globals and channel emotes)
 	// have to be processed from the Privmsg directly
 }
