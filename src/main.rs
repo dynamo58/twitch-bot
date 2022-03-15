@@ -3,15 +3,15 @@ mod commands;
 mod api;
 mod api_models;
 
-use twitch_bot::{Config, CommandSource, MyError, TwitchAuth, NameIdCache, EmoteCache};
+use twitch_bot::{Config, CommandSource, MyError, TwitchAuth, NameIdCache, EmoteCache, Cashe};
 use commands::handle_command;
 
 use std::sync::{Arc, Mutex};
 use colored::*;
 use chrono::Local;
 use dotenv::dotenv;
-use tokio::{self, sync::Mutex as TokioMutex};
 use sqlx::sqlite::SqlitePool;
+use tokio;
 use tokio_cron_scheduler::{JobScheduler, Job};
 // use tracing::{info, error, warn};
 use twitch_irc::login::StaticLoginCredentials;
@@ -44,13 +44,12 @@ async fn main() -> anyhow::Result<()> {
 	// to prevent flooding the Twitch API too much
 	let name_id_cache = Arc::new(Mutex::new(NameIdCache::new()));
 	let name_id_cache_arc = name_id_cache.clone();
-	
-	let emote_cache = Arc::new(TokioMutex::new({
-		match EmoteCache::init(&config, &auth).await {
+
+	let emote_cache = Arc::new(Mutex::new({
+		match Cashe::init(&config, &auth).await {
 			Ok(e) => e,
 			Err(e) => panic!("{}", e),
 		}
-			
 	}));
 
 	// holding on to the data forever would be dumb;
@@ -125,7 +124,8 @@ async fn main() -> anyhow::Result<()> {
 
     let message_listener_handle = {
 		let auth = auth.clone();
-		let cache_arc = name_id_cache.clone();
+		let nameid_cache_arc = name_id_cache.clone();
+		let emote_cache_arc = emote_cache.clone();
 
 		tokio::spawn(async move {
 			// capture incoming messages
@@ -176,11 +176,11 @@ async fn main() -> anyhow::Result<()> {
 					// if message is a command, handle it
 					if privmsg.message_text.chars().nth(0).unwrap() == config.prefix {
 						let cmd_src = CommandSource::from_privmsg(privmsg);
-						handle_command(&pool, client.clone(), &config, &auth, cache_arc.clone(), cmd_src).await.unwrap();
+						handle_command(&pool, client.clone(), &config, &auth, nameid_cache_arc.clone(), cmd_src).await.unwrap();
 					} else {
 						// index for markov if enabled by config
 						if config.index_markov {
-							db::log_markov(&pool, &emote_cache, &privmsg).await.unwrap();
+							db::log_markov(&pool, emote_cache_arc.clone(), &privmsg).await.unwrap();
 						}
 					}
 				}

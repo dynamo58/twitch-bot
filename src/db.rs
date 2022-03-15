@@ -1,9 +1,13 @@
 use crate::{MyError, EmoteCache};
 
+use std::sync::{Arc, Mutex};
+
 use rand::{self, Rng};
 use chrono::{DateTime, Utc};
 use sqlx::sqlite::SqlitePool;
 use sqlx::Sqlite;
+use twitch_irc::message::PrivmsgMessage;
+
 
 // QR == query result
 #[derive(sqlx::FromRow)]
@@ -89,7 +93,7 @@ pub async fn log(
 // processes message for markov index table entries
 pub async fn log_markov(
     pool: &SqlitePool,
-	emote_cache: &EmoteCache,
+	emote_cache_arc: Arc<Mutex<EmoteCache>>,
     privmsg: &twitch_irc::message::PrivmsgMessage,
 ) -> anyhow::Result<()> {
 	let mut conn = pool.acquire().await?;
@@ -98,30 +102,33 @@ pub async fn log_markov(
 
 	// process each word (besides the last one)
 	for idx in 0..words.len()-1 {
-		let word = match format_markov_entry(&emote_cache, words[idx]) {
-			Ok(a) => a,
-			Err(_) => return Ok(()),
-		};
-		let succ = match format_markov_entry(&emote_cache, words[idx + 1]) {
-			Ok(a) => a,
-			Err(_) => return Ok(()),
-		};
 
-        if let (Some(w), Some(s)) = (word, succ) {
-            let sql = r#"
-				INSERT 
-					INTO {{ CHANNEL_NAME }}_MARKOV
-						(word, succ) 
-					VALUES
-						($1, $2);
-			"#.replace("{{ CHANNEL_NAME }}", &privmsg.source.params[0][1..].to_owned());
-				
-            sqlx::query::<Sqlite>(&sql)
-                .bind(w)
-                .bind(s)
-                .execute(&mut *conn)
-                .await?;
-        }
+		if let Ok(cache) = emote_cache_arc.lock() {
+			let word = match format_markov_entry(&privmsg, &cache, words[idx]) {
+				Ok(a) => a,
+				Err(_) => return Ok(()),
+			};
+			let succ = match format_markov_entry(&privmsg, &cache, words[idx + 1]) {
+				Ok(a) => a,
+				Err(_) => return Ok(()),
+			};
+	
+			if let (Some(w), Some(s)) = (word, succ) {
+				let sql = r#"
+					INSERT 
+						INTO {{ CHANNEL_NAME }}_MARKOV
+							(word, succ) 
+						VALUES
+							($1, $2);
+				"#.replace("{{ CHANNEL_NAME }}", &privmsg.source.params[0][1..].to_owned());
+					
+				sqlx::query::<Sqlite>(&sql)
+					.bind(w)
+					.bind(s)
+					.execute(&mut *conn)
+					.await?;
+			}
+		}
 	}
 
 	Ok(())
@@ -176,6 +183,7 @@ pub async fn check_for_reminders(
 // format the words parsed from the message into format
 // acceptible for the db entry
 fn format_markov_entry(
+	privmsg: &PrivmsgMessage,
 	emote_cache: &EmoteCache,
 	s: &str,
 ) -> anyhow::Result<Option<String>> {
@@ -230,7 +238,7 @@ fn format_markov_entry(
     if out.contains("⠀") || out.contains("//") || out.contains("www.") || out == "".to_string() { 
         Ok(None)
     } else {
-		match emote_cache.self_or_privmsg_has_emote(&privmsg, out) {
+		match emote_cache.self_or_privmsg_has_emote(&privmsg, &out) {
 			true  => return Ok(Some(out)),
 			false => return Ok(Some(out.to_lowercase()))
 		}

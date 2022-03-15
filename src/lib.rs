@@ -156,6 +156,7 @@ pub struct EmoteCache {
 	// have to be processed from the Privmsg directly
 }
 
+pub type Cashe = EmoteCache;
 
 impl EmoteCache {
 	pub async fn init(
@@ -202,17 +203,17 @@ impl EmoteCache {
 	pub fn self_or_privmsg_has_emote(
 		&self,
 		privmsg:      &PrivmsgMessage,
-		emote_name:   String,
+		emote_name:   &String,
 	) -> bool {
-		let channel_name = privmsg.source.params[0][1..];
-		let channel_emotes = match self.channels.get(&channel_name) {
+		let channel_name = &privmsg.source.params[0][1..];
+		let channel_emotes = match self.channels.get(channel_name) {
 			Some(emotes) => emotes,
 			None => return false,
 		};
 
-		channel_emotes.contains(&emote_name) ||
-		self.globals.contains(&emote_name) ||
-		privmsg.emotes.iter().map(|emote| emote.code.to_owned()).collect::<String>().contains(&emote_name)
+		channel_emotes.contains(emote_name) ||
+		self.globals.contains(emote_name) ||
+		privmsg.emotes.iter().map(|emote| emote.code.to_owned()).collect::<String>().contains(emote_name)
 	}
 
 	pub async fn renew(
