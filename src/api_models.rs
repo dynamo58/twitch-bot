@@ -34,7 +34,7 @@ pub struct UsersResponseData {
 	// ... the state of the Twitch API smh my head
     // pub email: String,
     #[serde(rename = "created_at")]
-    pub created_at: String,
+    pub created_at: DateTime<Utc>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Deserialize)]

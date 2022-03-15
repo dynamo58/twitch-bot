@@ -45,6 +45,7 @@ pub async fn handle_command(
 		"remindme"       => add_reminder(&pool, &auth, cache_arc, &cmd, true).await,
 		"remind"         => add_reminder(&pool, &auth, cache_arc, &cmd, false).await,
 		"uptime"         => get_uptime(&auth, &cmd).await,
+		"accage"         => get_accage(&auth, &cmd).await
 		_ if (cmd.cmd.as_str() == &config.prefix.to_string()) => execute_alias(&pool, client.clone(), config, &auth, cache_arc, &cmd).await,
 		_ => Ok(None),
 	};
@@ -62,6 +63,31 @@ pub async fn handle_command(
 	}
 
 	Ok(())
+}
+
+// get age of specified account (or called)
+async fn get_accage(
+	auth: &TwitchAuth,
+	cmd: &CommandSource, 
+) -> anyhow::Result<Option<String>> {
+	let user_name = match cmd.args.get(0) {
+		Some(nick) => &nick,
+		None       => &cmd.sender.name
+	}
+
+	match db::get_acc_creation_date(auth, user_name).await? {
+		Some(date) => {
+			let duration = (Utc::now() - date).num_days();
+			let years = (duration as f32 / 365.24);
+
+			if years > 0.5 {
+				return Ok(Some(format!("⏱️ {user_name}'s account is {:.2} years old", years)));
+			} else {
+				return Ok(Some(format!("⏱️ {user_name}'s account is {duration} days old")));
+			}
+		},
+		None       => return Some("❌ user not found"),
+	}
 }
 
 // allows for user to add a new alias for themselves

@@ -3,6 +3,7 @@ use crate::api_models as models;
 
 use std::fmt::Display;
 
+use chrono::DateTime;
 use reqwest::Client;
 
 
@@ -10,12 +11,11 @@ use reqwest::Client;
 //               Twitch API
 // —————————————————————————————————————————
 
-// translates users nickname to id
 // ref: https://dev.twitch.tv/docs/api/reference#get-users
-pub async fn id_from_nick(
+pub async fn get_twitch_user(
     nick: &str,
     auth: &TwitchAuth,
-) -> anyhow::Result<Option<i32>> {
+) -> anyhow::Result<models::UsersResponse> {
     let client = Client::new();
 
     let res = client
@@ -29,10 +29,27 @@ pub async fn id_from_nick(
 
     let parsed: models::UsersResponse = serde_json::from_str(&res)?;
 
-    match parsed.data.get(0) {
+    Ok(parsed)
+}
+
+pub async fn id_from_nick(
+    nick: &str,
+    auth: &TwitchAuth,
+) -> anyhow::Result<Option<i32>> {
+    match get_twitch_user(&nick, &auth).await?.data.get(0) {
         Some(data) => return Ok(Some(data.id.parse::<i32>().unwrap())),
-        None => return Ok(None),
-    };
+        None       => return Ok(None),
+    }
+}
+
+pub async fn get_acc_creation_date(
+    nick: &str,
+    auth: &TwitchAuth,
+) -> anyhow::Result<DateTime> {
+    match get_twitch_user(&nick, &auth).await?.data.get(0) {
+        Some(data) => return Ok(Some(data.created_at)),
+        None       => return Ok(None),
+    }
 }
 
 // translates users id to name

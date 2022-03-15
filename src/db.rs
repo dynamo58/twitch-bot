@@ -102,13 +102,12 @@ pub async fn log_markov(
 
 	// process each word (besides the last one)
 	for idx in 0..words.len()-1 {
-
 		if let Ok(cache) = emote_cache_arc.lock() {
-			let word = match format_markov_entry(&privmsg, &cache, words[idx]) {
+			let word = match format_markov_entry(&privmsg, &*cache, words[idx]) {
 				Ok(a) => a,
 				Err(_) => return Ok(()),
 			};
-			let succ = match format_markov_entry(&privmsg, &cache, words[idx + 1]) {
+			let succ = match format_markov_entry(&privmsg, &*cache, words[idx + 1]) {
 				Ok(a) => a,
 				Err(_) => return Ok(()),
 			};
