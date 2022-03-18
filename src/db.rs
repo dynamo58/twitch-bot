@@ -1,6 +1,7 @@
-use crate::{MyError, EmoteCache};
+use crate::{MyError, EmoteCache, CommandSource};
 
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use rand::{self, Rng};
 use chrono::{DateTime, Utc};
@@ -22,7 +23,7 @@ pub struct Reminder {
     pub from_user_id: i32,
     pub for_user_id: i32,
     pub raise_timestamp: DateTime<Utc>,
-    pub message: String
+    pub message: String,
 }
 
 pub async fn init_db(
@@ -334,6 +335,44 @@ pub async fn insert_reminder(
 			)
 		)
 		.bind(&reminder.message)
+		.execute(&mut *conn)
+		.await?;
+    
+    Ok(())
+}
+
+pub async fn log_command(
+	pool: &SqlitePool,
+	cmd: &CommandSource,
+	execution_time: Duration,
+	output: &str,
+) -> anyhow::Result<()> {
+	let mut conn = pool.acquire().await?;
+
+	let ser_args = serde_json::to_string(&cmd.args)?;
+
+    let sql = r#"
+        INSERT 
+            INTO command_history
+                (sender_id, sender_name, command, args, execution_time_s, output, timestamp)
+            VALUES
+                (?1, ?2, ?3, ?4, ?5, ?6, ?7);
+    "#;
+	sqlx::query::<Sqlite>(&sql)
+		.bind(cmd.sender.id)
+		.bind(&cmd.sender.name)
+		.bind(&cmd.cmd)
+		.bind(ser_args)
+		.bind(execution_time.as_secs_f64())
+		.bind(output)
+		.bind(
+			&format!(
+				"{}",
+				Utc::now()
+					.format("%Y-%m-%d %H:%M:%S")
+					.to_string()
+			)
+		)
 		.execute(&mut *conn)
 		.await?;
     

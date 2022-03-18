@@ -3,7 +3,7 @@ pub mod db;
 pub mod api;
 pub mod api_models;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, fs::read_to_string};
 use std::path::Path;
 
 use colored::*;
@@ -53,11 +53,14 @@ pub struct Config {
 impl Config {
 	// parse from config file at `assets/config.json`
 	pub fn from_config_file() -> anyhow::Result<Config> {
-		let json: String = std::fs::read_to_string(Path::new("assets/config.json"))?;
+		let json: String = read_to_string(Path::new("assets/config.json"))?;
 		
 		let mut config: Config = serde_json::from_str(&json)?;
 
-		config.disregarded_users = config.disregarded_users.iter().map(|user| user.to_lowercase()).collect(); 
+		config.disregarded_users = config.disregarded_users
+			.iter()
+			.map(|user| user.to_lowercase())
+			.collect(); 
 
 		Ok(config)
 	}
@@ -98,7 +101,10 @@ pub struct CommandSource {
 impl CommandSource {
 	// parse new from twitch_irc::message::PrivmsgMessage
 	pub fn from_privmsg(privmsg: twitch_irc::message::PrivmsgMessage) -> Self {
-		let mut args: Vec<String> = privmsg.message_text.split(" ").map(|arg| arg.to_owned()).collect();
+		let mut args: Vec<String> = privmsg.message_text
+			.split(" ")
+			.map(|arg| arg.to_owned())
+			.collect();
 		let cmd = args[0].to_lowercase()[1..].to_owned();
 		args = args[1..].to_owned();
 
@@ -109,25 +115,27 @@ impl CommandSource {
 		};
 
 		// parse badges
-		let badges: Vec<TwitchStatus> = privmsg.badges.into_iter().map(|badge| match badge.name.as_str() {
-			"admin"       => TwitchStatus::Admin,
-			"broadcaster" => TwitchStatus::Broadcaster,
-			"global_mod"  => TwitchStatus::GlobalMod,
-			"moderator"   => TwitchStatus::Mod,
-			"staff"       => TwitchStatus::Staff,
-			"subscriber"  => TwitchStatus::Subscriber,
-			"vip"         => TwitchStatus::Vip,
-			"premium"     => TwitchStatus::Premium,
-			"glitchcon2020" => TwitchStatus::GlitchCon2020,
-			_ => {
-				println!(
-					"{} Encountered unrecognized badge: {}",
-					"WARN   ".bright_red().bold(),
-					badge.name.bold()
-				);
-				
-				TwitchStatus::Unrecognized
-			}
+		let badges: Vec<TwitchStatus> = privmsg.badges
+			.into_iter()
+			.map(|badge| match badge.name.as_str() {
+				"admin"       => TwitchStatus::Admin,
+				"broadcaster" => TwitchStatus::Broadcaster,
+				"global_mod"  => TwitchStatus::GlobalMod,
+				"moderator"   => TwitchStatus::Mod,
+				"staff"       => TwitchStatus::Staff,
+				"subscriber"  => TwitchStatus::Subscriber,
+				"vip"         => TwitchStatus::Vip,
+				"premium"     => TwitchStatus::Premium,
+				"glitchcon2020" => TwitchStatus::GlitchCon2020,
+				_ => {
+					println!(
+						"{} Encountered unrecognized badge: {}",
+						"WARN   ".bright_red().bold(),
+						badge.name.bold()
+					);
+					
+					TwitchStatus::Unrecognized
+				}
 		})
 		.collect();
 
@@ -213,7 +221,11 @@ impl EmoteCache {
 
 		channel_emotes.contains(emote_name) ||
 		self.globals.contains(emote_name) ||
-		privmsg.emotes.iter().map(|emote| emote.code.to_owned()).collect::<String>().contains(emote_name)
+		privmsg.emotes
+			.iter()
+			.map(|emote| emote.code.to_owned())
+			.collect::<String>()
+			.contains(emote_name)
 	}
 
 	pub async fn renew(

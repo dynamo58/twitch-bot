@@ -22,9 +22,20 @@ CREATE TABLE IF NOT EXISTS user_aliases (
 CREATE TABLE IF NOT EXISTS user_feedback (
 	id          INTEGER PRIMARY KEY,
 	sender_id   INTEGER NOT NULL,
-	sender_name INTEGER,
+	sender_name TEXT NOT NULL,
 	message     INTEGER NOT NULL,
 	time        TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS command_history (
+	id               INTEGER PRIMARY KEY,
+	sender_id        INTEGER NOT NULL,
+	sender_name      TEXT NOT NULL,
+	command          TEXT NOT NULL,
+	args             TEXT,
+	execution_time_s REAL NOT NULL,
+	output           TEXT,
+	timestamp        TEXT NOT NULL
 );
 
 INSERT INTO

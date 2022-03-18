@@ -3,6 +3,7 @@ use crate::db;
 use crate::api;
 
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use async_recursion::async_recursion;
 use chrono::{Duration, Utc};
@@ -28,6 +29,9 @@ pub async fn handle_command(
 		cache.insert(cmd.sender.name.to_owned(), cmd.sender.id);
 	}
 
+
+	let now = Instant::now();
+
 	let cmd_out = match cmd.cmd.as_str() {
 		"ping"           => ping(),
 		"echo"           => echo(&cmd.args),
@@ -50,6 +54,7 @@ pub async fn handle_command(
 		_ => Ok(None),
 	};
 
+	
 	let cmd_out = match cmd_out {
 		Ok(content) => content,
 		Err(e)      => {
@@ -58,6 +63,16 @@ pub async fn handle_command(
 		},
 	};
 
+	match db::log_command(
+		&pool,
+		&cmd,
+		now.elapsed(),
+		if let Some(s) = &cmd_out {s} else {""}
+	).await {
+		Ok(_) => (),
+		Err(e) => println!("{e}")
+	};
+	
 	if let Some(output) = cmd_out {
 		client.say(cmd.channel, output.into()).await.unwrap();
 	}
