@@ -548,3 +548,17 @@ pub struct WeatherDesc2 {
 pub struct WeatherIconUrl2 {
     pub value: String,
 }
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeelResponse {
+    pub translations: Vec<Translation>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Translation {
+    #[serde(rename = "detected_source_language")]
+    pub detected_source_language: String,
+    pub text: String,
+}

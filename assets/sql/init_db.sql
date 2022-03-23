@@ -38,6 +38,12 @@ CREATE TABLE IF NOT EXISTS command_history (
 	timestamp        TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS lurkers (
+	id        INTEGER PRIMARY KEY,
+	lurker_id INTEGER NOT NULL,
+	timestamp TEXT NOT NULL
+);
+
 INSERT INTO
 	explanations (code, message)
 	VALUES

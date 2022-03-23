@@ -3,7 +3,7 @@ mod commands;
 mod api;
 mod api_models;
 
-use twitch_bot::{Config, CommandSource, MyError, TwitchAuth, NameIdCache, EmoteCache, Cashe};
+use twitch_bot::{Config, CommandSource, MyError, TwitchAuth, NameIdCache, EmoteCache, Cashe, fmt_duration};
 use commands::handle_command;
 
 use std::sync::{Arc, Mutex};
@@ -144,6 +144,19 @@ async fn main() -> anyhow::Result<()> {
 						Ok(_) => (),
 						Err(e) => println!("{}   Uncaught error; message: {e}", "ERROR    ".red().bold()),
 					};
+
+					match db::is_lurker(
+						&pool,
+						privmsg.sender.id.parse::<i32>().unwrap()
+					).await.unwrap() {
+						Some(duration)	=> {
+							client.say(
+								privmsg.source.params[0][1..].to_owned(),
+								format!("{} is no longer AFK ({})", privmsg.sender.name, fmt_duration(duration)),
+							).await.unwrap();
+						},
+						None => (),
+					}
 
 					// check if user has any reminders set for him
 					let reminders = 

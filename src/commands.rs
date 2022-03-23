@@ -1,4 +1,6 @@
-use crate::{CommandSource, MyError, TwitchAuth, NameIdCache, Config};
+#![allow(unused)]
+
+use crate::{CommandSource, MyError, TwitchAuth, NameIdCache, Config, fmt_duration};
 use crate::db;
 use crate::api;
 
@@ -39,17 +41,21 @@ pub async fn handle_command(
 		"markov"         => markov(&pool, &cmd).await,
 		"suggest"        => suggest(&pool, &cmd).await,
 		"setalias"       => set_alias(&pool, &cmd).await,
+		"uptime"         => get_uptime(&auth, &cmd).await,
+		"accage"         => get_accage(&auth, &cmd).await,
 		"rmalias"        => remove_alias(&pool, &cmd).await,
 		"explain"        => explain(&pool, &cmd.args[0]).await,
 		"weather"        => get_weather_report(&cmd.args).await,
 		"clearreminders" => clear_reminders(&pool, cmd.sender.id).await,
 		"rmrm"           => clear_reminders(&pool, cmd.sender.id).await,
-		"rose"           => tag_rand_chatter_with_rose(&cmd.channel, &config.disregarded_users).await,
 		"first"          => first_message(&pool, &auth, cache_arc, &cmd).await,
 		"remindme"       => add_reminder(&pool, &auth, cache_arc, &cmd, true).await,
 		"remind"         => add_reminder(&pool, &auth, cache_arc, &cmd, false).await,
-		"uptime"         => get_uptime(&auth, &cmd).await,
-		"accage"         => get_accage(&auth, &cmd).await,
+		"rose"           => tag_rand_chatter_with_rose(&cmd.channel, &config.disregarded_users).await,
+		"lurk"           => set_lurk_status(&pool, &cmd).await,
+		// "offlinetime"
+		// "translate"      => translate(&cmd).await,
+		"bench"          => bench_command(&pool, client.clone(), config, &auth, cache_arc, cmd.clone()).await,
 		_ if (cmd.cmd.as_str() == &config.prefix.to_string()) => execute_alias(&pool, client.clone(), config, &auth, cache_arc, &cmd).await,
 		_ => Ok(None),
 	};
@@ -456,22 +462,80 @@ pub async fn get_uptime(
 		Some(i) => i,
 		None    => return Ok(Some("❌ streamer not live".into())),
 	};
-	let duration = (Utc::now() - info.data[0].started_at).num_seconds();
+	let duration = Utc::now() - info.data[0].started_at;
 	
-	let hrs = (duration as f32 / 3600.0) as u8;
-	let mins = ((duration % 3600) as f32 / 60.0) as u8;
-	let secs = (duration % 60) as u8;
-
-	let mut formatted = String::new();
-
-	if hrs > 0 {
-		formatted.push_str(&format!("{hrs} hrs, "));
-	}
-	if mins > 0 {
-		formatted.push_str(&format!("{mins} mins, "));
-	}
-
-	formatted.push_str(&format!("{secs} secs"));
+	let formatted = fmt_duration(duration);
 
 	Ok(Some(format!("⏱️ {channel} has been live for {formatted}")))
+}
+
+// the language identifiers
+// expected input: (l1,l2) 
+fn parse_langs(s: &String) -> anyhow::Result<(&str, &str)> {
+	Ok((
+		&s[s.find('(').ok_or(MyError::NotFound)?+1..s.find(',').ok_or(MyError::NotFound)?],
+		&s[s.find(',').ok_or(MyError::NotFound)?+1..s.find(')').ok_or(MyError::NotFound)?],
+	))
+} 
+
+pub async fn translate(
+	cmd: &CommandSource,
+) -> anyhow::Result<Option<String>> {
+	let langs = match cmd.args.get(0) {
+		Some(l) => l,
+		None    => return Ok(Some("❌ insufficient args".into())),
+	};
+
+	let text = match &cmd.args.get(1) {
+		Some(_) => cmd.args[1..].join(" "),
+		None    => return Ok(Some("❌ insufficient args".into())),
+	};
+
+	let (src_lang, target_lang) = match parse_langs(langs) {
+		Ok(ls) => ls,
+		Err(_) => return Ok(Some("❌ bad formatting".into())),
+	};
+
+	Ok(Some(api::translate(src_lang, target_lang, &text).await?))
+}
+
+pub async fn set_lurk_status(
+	pool: &SqlitePool,
+	cmd: &CommandSource,
+) -> anyhow::Result<Option<String>> {
+	let sender_name = &cmd.sender.name;
+	let sender_id = cmd.sender.id;
+	let timestamp = cmd.timestamp;
+
+	db::set_lurk_status(pool, sender_id, timestamp).await?;
+
+	Ok(Some(format!("{sender_name} is now AFK")))
+}
+
+pub async fn bench_command(
+	pool:       &SqlitePool,
+	client:     TwitchClient,
+	config:     &Config,
+	auth:       &TwitchAuth,
+	cache_arc: Arc<Mutex<NameIdCache>>,
+	cmd:        CommandSource,
+) -> anyhow::Result<Option<String>> {
+	let new_cmd = CommandSource {
+		cmd: match cmd.args.get(0) {
+			Some(a) => a[1..].to_owned(),
+			None => return Ok(Some("❌ no command provided".into())),
+		},
+		args: match cmd.args.get(1) {
+			Some(_) => cmd.args[1..].into_iter().map(|x| x.clone().to_string()).collect::<Vec<String>>(),
+			None => vec![],
+		},
+		channel: cmd.channel.clone(),
+		sender: cmd.sender.clone(),
+		statuses: cmd.statuses.clone(),
+		timestamp: cmd.timestamp.clone(),
+	};
+
+	let now = Instant::now();
+	handle_command(pool, client, config, auth, cache_arc, new_cmd).await?;
+	Ok(Some(format!("{} ms", now.elapsed().as_millis())))
 }

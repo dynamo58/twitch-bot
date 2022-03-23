@@ -28,7 +28,10 @@ A simple sophisticated Twitch bot in Rust.
 | first          | [nick: opt(str)] [channel: opt(str)] | get the first logged message of a user (in any channel) |
 | rose           | None                                 | send a rose to a random fellow chatter! |
 | weather        | [location: text]                     | get weather report from specified location |
-| accage         | [name: opt(str)]                     | get the account age of spec. user or one's self
+| accage         | [name: opt(str)]                     | get the account age of spec. user or one's self |
+| lurk           | None                                 | go into lurk mode (gets removed upon next message) |
+| bench          | Command                              | measure how long a command takes to execute |
+<!-- | translate      | (from,to) [text]                     | translate some text |  -->
 
 # Get started
 
@@ -40,6 +43,6 @@ A simple sophisticated Twitch bot in Rust.
 
 # Credits
 
-This bot is heavily inspired by other Twitch bots, takes some of their features and in some cases tries to build on top of them. Those are, most notably
+This bot is heavily inspired by other Twitch bots, takes some of their features and in some cases tries to build on top of them. Those are, most notably,
 
 - [Supibot](https://github.com/Supinic/supibot): a Twitch bot made by [Supinic](https://www.twitch.tv/supinic)

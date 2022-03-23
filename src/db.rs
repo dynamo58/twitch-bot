@@ -17,6 +17,9 @@ struct StringQR(String);
 #[derive(sqlx::FromRow)]
 struct I32QR(i32);
 
+#[derive(sqlx::FromRow)]
+struct DateTImeQR(DateTime<Utc>);
+
 #[derive(sqlx::FromRow, Debug)]
 pub struct Reminder {
 	pub id: i32,
@@ -556,4 +559,70 @@ pub async fn save_suggestion(
 		.await?;
 
     Ok(())
+}
+
+pub async fn set_lurk_status(
+	pool:      &SqlitePool,
+	sender_id: i32,
+	timestamp: DateTime<Utc>,
+) -> anyhow::Result<()> {
+	let mut conn = pool.acquire().await?;
+	
+	let sql = r#"
+		INSERT 
+			INTO lurkers
+				(lurker_id, timestamp)
+			VALUES
+				(?1, ?2);
+	"#;
+
+	sqlx::query::<Sqlite>(&sql)
+		.bind(sender_id)
+		.bind(timestamp.format("%Y-%m-%d %H:%M:%S").to_string())
+		.execute(&mut *conn)
+		.await?;
+	
+	Ok(())
+}
+
+// checks whether a user is currently lurking, if so, return the time duration
+pub async fn is_lurker(
+	pool: &SqlitePool,
+	sender_id: i32,
+) -> anyhow::Result<Option<chrono::Duration>> {
+	let mut conn = pool.acquire().await?;
+
+	// query lurkers
+	let sql = r#"
+		SELECT timestamp
+			FROM lurkers
+			WHERE
+				lurker_id=?1;
+	"#;
+
+	let lurkers: Vec<DateTImeQR> = sqlx::query_as::<Sqlite, DateTImeQR>(&sql)
+		.bind(sender_id)
+		.fetch_all(&mut *conn)
+		.await?;
+
+	let lurker_timestamp = match lurkers.len() {
+		0 => return Ok(None),
+		_ => lurkers[0].0
+	};
+
+	// remove from lurkers
+	let sql = r#"
+		DELETE
+			FROM lurkers
+			WHERE
+				lurker_id=?1;
+	"#;
+
+	sqlx::query::<Sqlite>(&sql)
+		.bind(sender_id)
+		.execute(&mut *conn)
+		.await?;
+
+	// return duration of lurk
+	Ok(Some(Utc::now() - lurker_timestamp))
 }

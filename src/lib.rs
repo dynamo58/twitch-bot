@@ -89,6 +89,7 @@ pub struct Sender {
 
 // the only info which is important and
 // which the bot works with
+#[derive(Clone)]
 pub struct CommandSource {
 	pub cmd: String,
 	pub args: Vec<String>,
@@ -252,4 +253,38 @@ impl EmoteCache {
 	}
 }
 
+pub fn fmt_duration(dur: chrono::Duration) -> String {
+	let mut out = String::new();
+	let num_sec = dur.num_seconds() as f32;
+	
+	let yrs = (num_sec / 31557082.0).floor();
+	let mts = ((num_sec - (yrs * 31557082.0)) / 2629757.0).floor();
+	let dys = ((num_sec - (yrs * 31557082.0) - (mts * 2629757.0)) / 86400.0).floor();
+	let hrs = ((num_sec - (yrs * 31557082.0) - (mts * 2629757.0) - (dys * 86400.0)) / 3600.0).floor();
+	let mns = ((num_sec - (yrs * 31557082.0) - (mts * 2629757.0) - (dys * 86400.0) - (hrs * 3600.0)) / 60.0).floor();
+	let scs = dur.num_seconds() % 60;
 
+	if yrs > 0.0 {
+		out.push_str(&format!("{yrs} years, "));
+	}
+
+	if mts > 0.0 {
+		out.push_str(&format!("{mts} months, "));
+	}
+
+	if dys > 0.0 {
+		out.push_str(&format!("{dys} days, "));
+	}
+
+	if hrs > 0.0 {
+		out.push_str(&format!("{hrs} hours, "));
+	}
+
+	if mns > 0.0 {
+		out.push_str(&format!("{mns} minutes, "));
+	}
+
+	out.push_str(&format!("{scs} seconds"));
+
+	out
+}

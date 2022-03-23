@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use crate::TwitchAuth;
 use crate::api_models as models;
 
@@ -320,4 +322,29 @@ pub async fn get_weather_report(
     let country = &weather.nearest_area[0].country[0].value;
 
     return Ok(Some(format!("Weather in {area}, {country}: {temp}, {humid}, {pressure}, {precip}, {wind}")));
+}
+
+pub async fn translate(
+    src_lang: &str,
+    target_lang: &str,
+    text: &str,
+) -> anyhow::Result<String> {
+    let client = Client::new();
+
+    let res = client
+        .get("https://api-free.deepl.com/v2/translate")
+        .form(&[
+            ("auth_key"   , "827af8d4-e6c8-caf2-bcc2-6b7cb6dea3fd:fx"),
+            ("text"       , text),
+            ("target_lang", target_lang)
+        ])
+        .send()
+        .await?
+        .text()
+        .await?;
+
+    dbg!(&res);
+    let info: models::DeelResponse = serde_json::from_str(&res)?;
+
+    Ok(info.translations[0].text.clone())
 }
