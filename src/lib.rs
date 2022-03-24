@@ -32,9 +32,9 @@ pub struct TwitchAuth {
 
 impl TwitchAuth {
 	pub fn from_dotenv() -> anyhow::Result<TwitchAuth> {
-		let oauth = std::env::var("TWITCH_OAUTH")?;
+		let oauth     = std::env::var("TWITCH_OAUTH")?;
 		let client_id = std::env::var("TWITCH_CLIENT_ID")?;
-		let nick = std::env::var("TWITCH_NICK")?;
+		let nick      = std::env::var("TWITCH_NICK")?;
 
 		Ok(TwitchAuth { client_id, oauth, nick })
 	}
@@ -48,6 +48,7 @@ pub struct Config {
 	pub disregarded_users: Vec<String>,
 	pub prefix: char,
 	pub index_markov: bool,
+	pub track_offliners: bool,
 }
 
 impl Config {
@@ -69,6 +70,7 @@ impl Config {
 // All the statuses one can have in Twitch chat
 #[derive(Clone)]
 pub enum TwitchStatus {
+	// TODO: make a derive macro to generate enum fields with value
 	Broadcaster,
 	Admin,
 	GlobalMod,

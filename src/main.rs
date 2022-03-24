@@ -78,8 +78,6 @@ async fn main() -> anyhow::Result<()> {
 	// to renew periodically via the tokio_cron_scheduler
 	// API, but I could not figure it out, so I will leave
 	// it blank for now....................................
-	
-	println!("{}   Set up scheduled tasks", "INFO   ".blue().bold());
 
 	// instantiate database connection pool
     let pool = SqlitePool::connect(DB_PATH)
@@ -105,6 +103,33 @@ async fn main() -> anyhow::Result<()> {
 				)
 			);
 	}
+
+	// {
+	// 	let pool = pool.clone();
+	// 	let channels = config.channels.clone();
+
+	// 	if config.track_offliners {
+	// 		sched.add(Job::new("0 * * * * *", move |_, _| {
+				
+	// 			for channel_name in &channels {
+	// 				if let Ok(None) = api::get_stream_info().await {
+	// 					if let Ok(Some(offliners)) = api::get_chatters(channel_name) {
+	// 						for offliner in offliners {
+	//							let id = todo!()
+	// 							db::add_offliner_time(offliner).await;
+	// 						}
+	// 					}
+						
+	// 				}
+	// 			}
+
+	// 			println!("{}   Added time for offliners", "INFO   ".blue().bold());
+	// 		}).unwrap())
+	// 			.expect(&format!("{}   Setting up a scheduled task failed, but why?", "ERROR  ".red().bold()));
+	// 	}
+	// }
+
+	println!("{}   Set up scheduled tasks", "INFO   ".blue().bold());
 
 	// instantiate Twitch client
 	let client_config: ClientConfig<StaticLoginCredentials> = ClientConfig::new_simple(

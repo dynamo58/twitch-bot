@@ -626,3 +626,26 @@ pub async fn is_lurker(
 	// return duration of lurk
 	Ok(Some(Utc::now() - lurker_timestamp))
 }
+
+pub async fn add_offliner_time(
+	pool:       &SqlitePool,
+	offliner_id: i32,
+) -> anyhow::Result<()> {
+	let mut conn = pool.acquire().await?;
+
+	let sql = r#"
+    INSERT INTO
+        offliners
+			(offliner_id, time_s)
+        VALUES
+	        (?1, 60)
+		ON CONFLICT
+		DO
+			UPDATE SET  time_s = time_s + 60
+    "#;
+
+	sqlx::query::<Sqlite>(&sql)
+		.bind(offliner_id)
+		.execute(&mut *conn)
+		.await?
+}

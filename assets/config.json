@@ -1,6 +1,7 @@
 {
 	"prefix": "$",
 	"index_markov": true,
+	"track_offliners": true,
 	"channels": [
 		"gisthekey",
 		"lovcen",
