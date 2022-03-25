@@ -649,3 +649,27 @@ pub async fn add_offliner_time(
 		.execute(&mut *conn)
 		.await?
 }
+
+pub async fn get_offline_time(
+	pool: &SqlitePool,
+	offliner_id: i32,
+) -> anyhow::Result<chrono::Duration> {
+	let mut conn = pool.acquire().await?;
+
+	let sql = r#"
+		SELECT
+			time_s
+		WHERE
+			offliner_id=$1;
+	"#;
+
+	let offliners_secs: i32 = sqlx::query_as::<Sqlite, I32QR>(&sql)
+		.bind(offliner_id)
+		.fetch_all(&mut *conn)
+		.await?;
+
+	match offliners_secs.get(0) {
+		Some(a) => return chrono::Duration::seconds(a.0),
+		None    => return chrono::Duration::seconds(0),
+	}
+}

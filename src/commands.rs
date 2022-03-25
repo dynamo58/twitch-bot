@@ -53,7 +53,7 @@ pub async fn handle_command(
 		"remind"         => add_reminder(&pool, &auth, cache_arc, &cmd, false).await,
 		"rose"           => tag_rand_chatter_with_rose(&cmd.channel, &config.disregarded_users).await,
 		"lurk"           => set_lurk_status(&pool, &cmd).await,
-		// "offlinetime"
+		"offlinetime"    => get_offline_time(&pool, &auth, &cmd).await,
 		// "translate"      => translate(&cmd).await,
 		"bench"          => bench_command(&pool, client.clone(), config, &auth, cache_arc, cmd.clone()).await,
 		_ if (cmd.cmd.as_str() == &config.prefix.to_string()) => execute_alias(&pool, client.clone(), config, &auth, cache_arc, &cmd).await,
@@ -538,4 +538,23 @@ pub async fn bench_command(
 	let now = Instant::now();
 	handle_command(pool, client, config, auth, cache_arc, new_cmd).await?;
 	Ok(Some(format!("{} ms", now.elapsed().as_millis())))
+}
+
+pub async fn get_offline_time(
+	pool: &SqlitePool,
+	auth: &TwitchAuth,
+	cmd:  &CommandSource,
+) -> anyhow::Result<Option<String>> {
+	let user_id = match args.len() {
+		0 => cmd.sender.id,
+		_ => {
+			let name = &cmd.args[0];
+
+			api::id_from_nick(name, auth).await?.ok_or(MyError::NotFound)?
+		}
+	};
+
+	let t = db::get_offline_time(pool, user_id).await?;
+
+	Ok(Some(format!("{} has spent {} in the offline chat!", cmd.sender.name, fmt_duration(t))))
 }

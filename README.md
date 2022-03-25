@@ -11,26 +11,27 @@ A simple sophisticated Twitch bot in Rust.
 
 # Commands
 
-| Command        | Args                                 | Description          |
-| ---            | ---                                  | ---                  |
-| ping           | None                                 | responds with "pong" |
-| explain        | [error code: str]                    | tries to respond with error in assets/explanations |
-| markov         | [start: str] [count: int]            | responds with a markov chain generated from saved chat messages |
-| echo           | [text]                               | repeats user's message |
-| say            | [text]                               | alias for `echo` |
-| remind         | (xh,xm) [user: str] [text]           | remind user in a spec. amount of time (when he types a messages after the duration has passed) |
-| remindme       | (xh,xm) [text]                       | shortcut for reminding one's self |
-| clearreminders | None                                 | clears all reminders the user has set (that are still pending) |
-| rmrm           | None                                 | alias for the `clearreminders` command |
+| Command        | Args                                 | Description                                                        |
+| ---            | ---                                  | ---                                                                |
+| ping           | None                                 | responds with "pong"                                               |
+| explain        | [error code: str]                    | tries to respond with error in assets/explanations                 |
+| markov         | [start: str] [count: int]            | responds with a markov chain generated from saved chat messages    |
+| echo           | [text]                               | repeats user's message                                             |
+| say            | [text]                               | alias for `echo`                                                   |
+| remind         | (xh,xm) [user: str] [text]           | reminds user when he types if spec. amouunt of time has passed     |
+| remindme       | (xh,xm) [text]                       | shortcut for reminding one's self                                  |
+| clearreminders | None                                 | clears all reminders the user has set (that are still pending)     |
+| rmrm           | None                                 | alias for the `clearreminders` command                             |
 | setalias       | [name: str] [cmd expression]         | set an alias for caller (like a substitue for specificied command) |
-| \[prefix\]     | [alias name: str]                    | execute an alias |
-| rmalias        | [alias name: str]                    | remove an alias |
-| first          | [nick: opt(str)] [channel: opt(str)] | get the first logged message of a user (in any channel) |
-| rose           | None                                 | send a rose to a random fellow chatter! |
-| weather        | [location: text]                     | get weather report from specified location |
-| accage         | [name: opt(str)]                     | get the account age of spec. user or one's self |
-| lurk           | None                                 | go into lurk mode (gets removed upon next message) |
-| bench          | Command                              | measure how long a command takes to execute |
+| \[prefix\]     | [alias name: str]                    | execute an alias                                                   |
+| rmalias        | [alias name: str]                    | remove an alias                                                    |
+| first          | [nick: opt(str)] [channel: opt(str)] | get the first logged message of a user (in any channel)            |
+| rose           | None                                 | send a rose to a random fellow chatter!                            |
+| weather        | [location: text]                     | get weather report from specified location                         |
+| accage         | [name: opt(str)]                     | get the account age of spec. user or one's self                    |
+| lurk           | None                                 | go into lurk mode (gets removed upon next message)                 |
+| bench          | Command                              | measure how long a command takes to execute                        |
+| offlinetime    | [name: opt(str)]                     | returns the time a user has thus far spent in offline chat         |
 <!-- | translate      | (from,to) [text]                     | translate some text |  -->
 
 # Get started
@@ -45,4 +46,5 @@ A simple sophisticated Twitch bot in Rust.
 
 This bot is heavily inspired by other Twitch bots, takes some of their features and in some cases tries to build on top of them. Those are, most notably,
 
-- [Supibot](https://github.com/Supinic/supibot): a Twitch bot made by [Supinic](https://www.twitch.tv/supinic)
+- [Supibot](https://github.com/Supinic/supibot) made by [Supinic](https://www.twitch.tv/supinic)
+- [kbot](https://github.com/KUNszg/kbot) made by [KUNszg](https://kunszg.com/)
