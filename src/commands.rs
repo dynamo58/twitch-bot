@@ -425,7 +425,7 @@ pub async fn tag_rand_chatter_with_rose(
 	while rand_chatter.len() == 0 {
 		let try_rand_chatter = chatters[rand::thread_rng().gen_range(0..chatters.len())].clone();
 	
-		if !disregarded_users.contains(&try_rand_chatter) {
+		if !disregarded_users.contains(&try_rand_chatter.to_lowercase()) {
 			rand_chatter = try_rand_chatter;
 		}
 	}
@@ -545,16 +545,25 @@ pub async fn get_offline_time(
 	auth: &TwitchAuth,
 	cmd:  &CommandSource,
 ) -> anyhow::Result<Option<String>> {
-	let user_id = match args.len() {
-		0 => cmd.sender.id,
+	let channel_name: &str;
+	let offliner_id: i32;
+	
+	match cmd.args.len() {
+		0 => {
+			channel_name = &cmd.channel;
+			offliner_id = cmd.sender.id;
+		},
+		1 => {
+			channel_name = &cmd.channel;
+			offliner_id = api::id_from_nick(&cmd.args[0], auth).await?.ok_or(MyError::NotFound)?
+		},
 		_ => {
-			let name = &cmd.args[0];
-
-			api::id_from_nick(name, auth).await?.ok_or(MyError::NotFound)?
-		}
+			channel_name = &cmd.args[1];
+			offliner_id = api::id_from_nick(&cmd.args[0], auth).await?.ok_or(MyError::NotFound)?
+		},
 	};
 
-	let t = db::get_offline_time(pool, user_id).await?;
+	let t = db::get_offline_time(pool, channel_name, offliner_id).await?;
 
-	Ok(Some(format!("{} has spent {} in the offline chat!", cmd.sender.name, fmt_duration(t))))
+	Ok(Some(format!("{} has spent {} in {channel_name}'s offline chat!", cmd.sender.name, fmt_duration(t))))
 }

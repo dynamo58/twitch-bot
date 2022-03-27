@@ -1,18 +1,19 @@
-mod db;
-mod commands;
 mod api;
 mod api_models;
+mod commands;
+mod db;
+mod background;
 
 use twitch_bot::{Config, CommandSource, MyError, TwitchAuth, NameIdCache, EmoteCache, Cashe, fmt_duration};
+use background as bg;
 use commands::handle_command;
 
 use std::sync::{Arc, Mutex};
+
 use colored::*;
 use chrono::Local;
 use dotenv::dotenv;
 use sqlx::sqlite::SqlitePool;
-use tokio;
-use tokio_cron_scheduler::{JobScheduler, Job};
 // use tracing::{info, error, warn};
 use twitch_irc::login::StaticLoginCredentials;
 use twitch_irc::{ClientConfig, SecureTCPTransport, TwitchIRCClient};
@@ -23,6 +24,7 @@ use twitch_irc::message::ServerMessage;
 // that might be subject to change
 // in the future, idk
 const DB_PATH: &str = "sqlite:db.db";
+
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -43,7 +45,6 @@ async fn main() -> anyhow::Result<()> {
 	// this will hold cached names and ids of users
 	// to prevent flooding the Twitch API too much
 	let name_id_cache = Arc::new(Mutex::new(NameIdCache::new()));
-	let name_id_cache_arc = name_id_cache.clone();
 
 	let emote_cache = Arc::new(Mutex::new({
 		match Cashe::init(&config, &auth).await {
@@ -51,34 +52,7 @@ async fn main() -> anyhow::Result<()> {
 			Err(e) => panic!("{}", e),
 		}
 	}));
-
-	// holding on to the data forever would be dumb;
-	// it would make the amount of memory used
-	// go up indefinitely during runtime + 
-	// in the case of name-id cache,
-	// one might as well not use ids for user
-	// identification at all and go by names instead;
-	// therefore the cache is to be cleared
-	// every now and then
-	let mut sched = JobScheduler::new();
-
-	// the format of these is as follows:
-	// sec   min   hour   day of month   month   day of week   year
-	// *     *     *      *              *       *             *
-	sched.add(Job::new("0 1/15 * * * *", move |_, _| {
-        if let Ok(mut cache) = name_id_cache_arc.lock() {
-			let num = cache.len();
-			(*cache).clear();
-			println!("{}   Cleared name-id cache ({} items)", "INFO   ".blue().bold(), num);
-        }
-    }).unwrap())
-		.expect(&format!("{}   Setting up a scheduled task failed, but why?", "ERROR  ".red().bold()));
 	
-	// I was extensively trying to get the emote cache
-	// to renew periodically via the tokio_cron_scheduler
-	// API, but I could not figure it out, so I will leave
-	// it blank for now....................................
-
 	// instantiate database connection pool
     let pool = SqlitePool::connect(DB_PATH)
 		.await
@@ -104,33 +78,6 @@ async fn main() -> anyhow::Result<()> {
 			);
 	}
 
-	// {
-	// 	let pool = pool.clone();
-	// 	let channels = config.channels.clone();
-
-	// 	if config.track_offliners {
-	// 		sched.add(Job::new("0 * * * * *", move |_, _| {
-				
-	// 			for channel_name in &channels {
-	// 				if let Ok(None) = api::get_stream_info().await {
-	// 					if let Ok(Some(offliners)) = api::get_chatters(channel_name) {
-	// 						for offliner in offliners {
-	//							let id = todo!()
-	// 							db::add_offliner_time(offliner).await;
-	// 						}
-	// 					}
-						
-	// 				}
-	// 			}
-
-	// 			println!("{}   Added time for offliners", "INFO   ".blue().bold());
-	// 		}).unwrap())
-	// 			.expect(&format!("{}   Setting up a scheduled task failed, but why?", "ERROR  ".red().bold()));
-	// 	}
-	// }
-
-	println!("{}   Set up scheduled tasks", "INFO   ".blue().bold());
-
 	// instantiate Twitch client
 	let client_config: ClientConfig<StaticLoginCredentials> = ClientConfig::new_simple(
 		StaticLoginCredentials::new(
@@ -146,6 +93,42 @@ async fn main() -> anyhow::Result<()> {
 		client.join(channel.into());
 		println!("{}   Joined #{}", "INFO   ".blue().bold(), channel.bold());
 	}
+
+	// set up tasks running periodcally in thebackground
+	{
+		let _pool = pool.clone();
+		let _config = config.clone();
+		let _auth = auth.clone();
+		let _name_id_cache = name_id_cache.clone();
+		
+
+		if config.track_offliners {
+			tokio::spawn(async move {
+				loop {
+					match bg::check_for_offliners(&_pool, &_config, &_auth, &_name_id_cache).await {
+						Ok(num)  => println!("{}   Checked for offliners ({} occurences)", "INFO   ".blue().bold(), format!("{}", num).bold()),
+						Err(e)   => println!("{}   Error checking for offliners; err: {e}", "ERROR    ".red().bold()),
+					}
+					std::thread::sleep(std::time::Duration::from_secs(60));
+				}
+			});
+		}
+
+		let _name_id_cache = name_id_cache.clone();
+
+		tokio::spawn(async move {
+			loop {
+				match bg::clear_name_id_cache(&_name_id_cache).await {
+					Ok(num) => println!("{}   Cleared name-id cache ({} items)", "INFO   ".blue().bold(), num),
+					Err(e)  => println!("{}   Error clearing name-id cache; err: {e}", "ERROR    ".red().bold()),
+				}
+
+				std::thread::sleep(std::time::Duration::from_secs(15 * 60));
+			}
+		});
+	}
+
+	println!("{}   Set up scheduled tasks", "INFO   ".blue().bold());
 
     let message_listener_handle = {
 		let auth = auth.clone();
@@ -228,12 +211,11 @@ async fn main() -> anyhow::Result<()> {
 
 	let t = format!("{}", Local::now());
 	println!(
-		"{}   Bot is now running!\n          Local time is {}",
+		"{}   Bot is now running!\n          Local time is {}\n\n",
 		"SUCCESS".green().bold(),
 		&t[..t.len()-17]
 	);
 	std::mem::drop(t);
-	sched.start().await.unwrap();
     message_listener_handle.await.unwrap();
     Ok(())
 }

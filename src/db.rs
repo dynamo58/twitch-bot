@@ -48,14 +48,7 @@ pub async fn try_create_tables_for_channel(
     name: &str,
 ) -> anyhow::Result<()> {
 	let mut conn = pool.acquire().await?;
-	let sql = include_str!("../assets/sql/channel_table.sql")
-		.replace("{{ TABLE_NAME }}", name);
-
-	sqlx::query::<Sqlite>(&sql)
-		.execute(&mut *conn)
-		.await?;
-
-	let sql = include_str!("../assets/sql/markov_index_table.sql")
+	let sql = include_str!("../assets/sql/channel_tables.sql")
 		.replace("{{ CHANNEL_NAME }}", name);
 
 	sqlx::query::<Sqlite>(&sql)
@@ -84,7 +77,6 @@ pub async fn log(
 	sqlx::query::<Sqlite>(&sql)
 		.bind(&privmsg.sender.id)
 		.bind(&privmsg.sender.name)
-		// TODO: this is utterly fucking retarded
 		.bind(&privmsg.badges.iter().map(|badge| format!("{}_", badge.name)).collect::<String>())
 		.bind(&format!("{}", &privmsg.server_timestamp))
 		.bind(&privmsg.message_text)
@@ -627,31 +619,36 @@ pub async fn is_lurker(
 	Ok(Some(Utc::now() - lurker_timestamp))
 }
 
-pub async fn add_offliner_time(
-	pool:       &SqlitePool,
-	offliner_id: i32,
+// adds a minute to a chatter's offline time
+pub async fn add_offliner_minute(
+	pool:         &SqlitePool,
+	channel_name: &str,
+	offliner_id:  i32,
 ) -> anyhow::Result<()> {
 	let mut conn = pool.acquire().await?;
 
 	let sql = r#"
     INSERT INTO
-        offliners
+        {{ CHANNEL_NAME }}_OFFLINERS
 			(offliner_id, time_s)
         VALUES
 	        (?1, 60)
 		ON CONFLICT
 		DO
 			UPDATE SET  time_s = time_s + 60
-    "#;
+    "#.replace("{{ CHANNEL_NAME }}", channel_name);
 
 	sqlx::query::<Sqlite>(&sql)
 		.bind(offliner_id)
 		.execute(&mut *conn)
-		.await?
+		.await?;
+	
+	Ok(())
 }
 
 pub async fn get_offline_time(
 	pool: &SqlitePool,
+	channel_name: &str,
 	offliner_id: i32,
 ) -> anyhow::Result<chrono::Duration> {
 	let mut conn = pool.acquire().await?;
@@ -659,17 +656,19 @@ pub async fn get_offline_time(
 	let sql = r#"
 		SELECT
 			time_s
+		FROM
+			{{ CHANNEL_NAME }}_OFFLINERS
 		WHERE
 			offliner_id=$1;
-	"#;
+	"#.replace("{{ CHANNEL_NAME }}", channel_name);
 
-	let offliners_secs: i32 = sqlx::query_as::<Sqlite, I32QR>(&sql)
+	let offliners_secs: Vec<I32QR> = sqlx::query_as::<Sqlite, I32QR>(&sql)
 		.bind(offliner_id)
 		.fetch_all(&mut *conn)
 		.await?;
 
 	match offliners_secs.get(0) {
-		Some(a) => return chrono::Duration::seconds(a.0),
-		None    => return chrono::Duration::seconds(0),
+		Some(a) => return Ok(chrono::Duration::seconds(a.0 as i64)),
+		None    => return Ok(chrono::Duration::seconds(0         )),
 	}
 }

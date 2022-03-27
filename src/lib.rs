@@ -2,6 +2,7 @@ pub mod commands;
 pub mod db;
 pub mod api;
 pub mod api_models;
+pub mod background;
 
 use std::{collections::HashMap, fs::read_to_string};
 use std::path::Path;
@@ -61,7 +62,7 @@ impl Config {
 		config.disregarded_users = config.disregarded_users
 			.iter()
 			.map(|user| user.to_lowercase())
-			.collect(); 
+			.collect();
 
 		Ok(config)
 	}
@@ -70,7 +71,6 @@ impl Config {
 // All the statuses one can have in Twitch chat
 #[derive(Clone)]
 pub enum TwitchStatus {
-	// TODO: make a derive macro to generate enum fields with value
 	Broadcaster,
 	Admin,
 	GlobalMod,
@@ -286,7 +286,10 @@ pub fn fmt_duration(dur: chrono::Duration) -> String {
 		out.push_str(&format!("{mns} minutes, "));
 	}
 
-	out.push_str(&format!("{scs} seconds"));
+	if scs > 0 {
+		out.push_str(&format!("{scs} seconds,"));
+	}
 
+	out.pop();
 	out
 }

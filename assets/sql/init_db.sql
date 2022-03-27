@@ -44,12 +44,6 @@ CREATE TABLE IF NOT EXISTS lurkers (
 	timestamp TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS offliners (
-	id          INTEGER PRIMARY KEY,
-	offliner_id INTEGER NOT NULL UNIQUE,
-	time_s      INTEGER DEFAULT 0
-);
-
 INSERT INTO
 	explanations (code, message)
 	VALUES
