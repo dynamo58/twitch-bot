@@ -2,6 +2,7 @@
 
 use crate::TwitchAuth;
 use crate::api_models as models;
+use crate::api_models::WikiResponse;
 
 use std::fmt::Display;
 
@@ -329,22 +330,40 @@ pub async fn translate(
     target_lang: &str,
     text: &str,
 ) -> anyhow::Result<String> {
+    todo!()
+    // let client = Client::new();
+
+    // let res = client
+    //     .get("https://api-free.deepl.com/v2/translate")
+    //     .form(&[
+    //         ("text"       , text),
+    //         ("target_lang", target_lang)
+    //     ])
+    //     .send()
+    //     .await?
+    //     .text()
+    //     .await?;
+
+    // dbg!(&res);
+    // let info: models::DeelResponse = serde_json::from_str(&res)?;
+
+    // Ok(info.translations[0].text.clone())
+}
+
+pub async fn query_wikipedia(
+    phrase: &str,
+) -> anyhow::Result<Option<WikiResponse>> {
     let client = Client::new();
 
     let res = client
-        .get("https://api-free.deepl.com/v2/translate")
-        .form(&[
-            ("auth_key"   , "827af8d4-e6c8-caf2-bcc2-6b7cb6dea3fd:fx"),
-            ("text"       , text),
-            ("target_lang", target_lang)
-        ])
+        .get(&format!("https://en.wikipedia.org/w/api.php?action=query&titles={phrase}&prop=extracts&format=json&exintro=1&exsectionformat=plain&explaintext=1"))
         .send()
         .await?
         .text()
         .await?;
 
-    dbg!(&res);
-    let info: models::DeelResponse = serde_json::from_str(&res)?;
-
-    Ok(info.translations[0].text.clone())
+    match serde_json::from_str(&res) {
+        Ok(w) => return Ok(Some(w)),
+        Err(_) => return Ok(None),
+    }
 }

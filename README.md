@@ -32,6 +32,7 @@ A simple sophisticated Twitch bot in Rust.
 | lurk           | None                                 | go into lurk mode (gets removed upon next message)                 |
 | bench          | Command                              | measure how long a command takes to execute                        |
 | offlinetime    | [name: opt(str)]                     | returns the time a user has thus far spent in offline chat         |
+| wiki           | [phrase: text]                       | tries to query Wikipedia for searched topic/title                  |
 <!-- | translate      | (from,to) [text]                     | translate some text |  -->
 
 # Get started

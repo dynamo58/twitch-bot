@@ -258,6 +258,10 @@ impl EmoteCache {
 pub fn fmt_duration(dur: chrono::Duration) -> String {
 	let mut out = String::new();
 	let num_sec = dur.num_seconds() as f32;
+
+	if num_sec == 0.0 {
+		return "no time".into();
+	}
 	
 	let yrs = (num_sec / 31557082.0).floor();
 	let mts = ((num_sec - (yrs * 31557082.0)) / 2629757.0).floor();
@@ -287,9 +291,10 @@ pub fn fmt_duration(dur: chrono::Duration) -> String {
 	}
 
 	if scs > 0 {
-		out.push_str(&format!("{scs} seconds,"));
+		out.push_str(&format!("{scs} seconds, "));
 	}
 
+	out.pop();
 	out.pop();
 	out
 }

@@ -54,6 +54,7 @@ pub async fn handle_command(
 		"rose"           => tag_rand_chatter_with_rose(&cmd.channel, &config.disregarded_users).await,
 		"lurk"           => set_lurk_status(&pool, &cmd).await,
 		"offlinetime"    => get_offline_time(&pool, &auth, &cmd).await,
+		"wiki"           => query_wikipedia(&cmd).await,
 		// "translate"      => translate(&cmd).await,
 		"bench"          => bench_command(&pool, client.clone(), config, &auth, cache_arc, cmd.clone()).await,
 		_ if (cmd.cmd.as_str() == &config.prefix.to_string()) => execute_alias(&pool, client.clone(), config, &auth, cache_arc, &cmd).await,
@@ -328,7 +329,7 @@ async fn markov(
 		return Ok(Some("❌ word not indexed yet | E1".into()));
 	}
 
-	Ok(Some(output.join(" ")))
+	Ok(Some(format!("🔮 {}", output.join(" "))))
 }
 
 // show additional information about a spec. error
@@ -547,23 +548,53 @@ pub async fn get_offline_time(
 ) -> anyhow::Result<Option<String>> {
 	let channel_name: &str;
 	let offliner_id: i32;
+	let offliner_name: &str;
 	
 	match cmd.args.len() {
 		0 => {
 			channel_name = &cmd.channel;
 			offliner_id = cmd.sender.id;
+			offliner_name = &cmd.sender.name;
 		},
 		1 => {
 			channel_name = &cmd.channel;
-			offliner_id = api::id_from_nick(&cmd.args[0], auth).await?.ok_or(MyError::NotFound)?
+			offliner_name = &cmd.args[0];
+			offliner_id = match api::id_from_nick(&cmd.args[0], auth).await? {
+				Some(id) => id,
+				None     => return Ok(Some(format!("❌ user {offliner_name} does not exist")))
+			}
 		},
 		_ => {
 			channel_name = &cmd.args[1];
-			offliner_id = api::id_from_nick(&cmd.args[0], auth).await?.ok_or(MyError::NotFound)?
+			offliner_name = &cmd.args[0];
+			offliner_id = match api::id_from_nick(&cmd.args[0], auth).await? {
+				Some(id) => id,
+				None     => return Ok(Some(format!("❌ user {offliner_name} does not exist")))
+			}
 		},
 	};
 
 	let t = db::get_offline_time(pool, channel_name, offliner_id).await?;
-
-	Ok(Some(format!("{} has spent {} in {channel_name}'s offline chat!", cmd.sender.name, fmt_duration(t))))
+	Ok(Some(format!("{offliner_name} has spent {} in {channel_name}'s offline chat!", fmt_duration(t))))
 }
+
+pub async fn query_wikipedia(
+	cmd: &CommandSource,
+) -> anyhow::Result<Option<String>> {
+	let title = &cmd.args.join(" ");
+
+	match api::query_wikipedia(title).await? {
+		Some(mut w) => {
+			for (_, page) in w.query.pages.iter_mut() {
+				let abs = page
+					.extract
+					.split(".").collect::<Vec<&str>>()[0];
+
+				return Ok(Some(abs.to_owned()));
+			}
+		},
+		None => return Ok(Some("❌ Article not found.".into())),
+	};
+	todo!()
+}
+

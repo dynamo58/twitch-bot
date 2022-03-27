@@ -662,7 +662,7 @@ pub async fn get_offline_time(
 			offliner_id=$1;
 	"#.replace("{{ CHANNEL_NAME }}", channel_name);
 
-	let offliners_secs: Vec<I32QR> = sqlx::query_as::<Sqlite, I32QR>(&sql)
+	let offliners_secs = sqlx::query_as::<Sqlite, I32QR>(&sql)
 		.bind(offliner_id)
 		.fetch_all(&mut *conn)
 		.await?;

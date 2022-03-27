@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize};
 use chrono::{DateTime, Utc};
 
@@ -561,4 +563,34 @@ pub struct Translation {
     #[serde(rename = "detected_source_language")]
     pub detected_source_language: String,
     pub text: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WikiResponse {
+    pub batchcomplete: String,
+    pub query: Query,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Query {
+    pub normalized: Vec<Normalized>,
+    pub pages: HashMap<i32, PagesInner>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Normalized {
+    pub from: String,
+    pub to: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PagesInner {
+    pub pageid: i64,
+    pub ns: i64,
+    pub title: String,
+    pub extract: String,
 }
