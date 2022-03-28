@@ -33,6 +33,7 @@ A simple sophisticated Twitch bot in Rust.
 | bench          | Command                              | measure how long a command takes to execute                        |
 | offlinetime    | [name: opt(str)]                     | returns the time a user has thus far spent in offline chat         |
 | wiki           | [phrase: text]                       | tries to query Wikipedia for searched topic/title                  |
+| define         | [word: str]                          | queries a dictionary API for a word definition                     |
 <!-- | translate      | (from,to) [text]                     | translate some text |  -->
 
 # Get started

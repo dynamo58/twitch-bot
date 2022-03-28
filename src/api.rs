@@ -367,3 +367,29 @@ pub async fn query_wikipedia(
         Err(_) => return Ok(None),
     }
 }
+
+pub async fn query_dictionary(
+    word: &str,
+) -> anyhow::Result<Option<String>> {
+    let client = Client::new();
+
+    let res = client
+        .get(&format!("https://api.dictionaryapi.dev/api/v2/entries/en/{word}"))
+        .send()
+        .await?
+        .text()
+        .await?;
+
+    let parsed: models::DictionaryResponse = match serde_json::from_str(&res) {
+        Ok(tr) => tr,
+        Err(e) => {println!("{e}");return Ok(None)},
+    };
+
+    let pronunciation = match &parsed[0].phonetic {
+        Some(p) => p,
+        None    => ""
+    };
+    let definition    = &parsed[0].meanings[0].definitions[0].definition;
+
+    Ok(Some(format!("{pronunciation} {definition}")))
+}

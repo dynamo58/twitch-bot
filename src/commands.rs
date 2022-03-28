@@ -40,21 +40,22 @@ pub async fn handle_command(
 		"say"            => echo(&cmd.args),
 		"markov"         => markov(&pool, &cmd).await,
 		"suggest"        => suggest(&pool, &cmd).await,
+		"wiki"           => query_wikipedia(&cmd).await,
+		"define"         => query_dictionary(&cmd).await,
 		"setalias"       => set_alias(&pool, &cmd).await,
 		"uptime"         => get_uptime(&auth, &cmd).await,
 		"accage"         => get_accage(&auth, &cmd).await,
 		"rmalias"        => remove_alias(&pool, &cmd).await,
+		"lurk"           => set_lurk_status(&pool, &cmd).await,
 		"explain"        => explain(&pool, &cmd.args[0]).await,
 		"weather"        => get_weather_report(&cmd.args).await,
+		"offlinetime"    => get_offline_time(&pool, &auth, &cmd).await,
 		"clearreminders" => clear_reminders(&pool, cmd.sender.id).await,
 		"rmrm"           => clear_reminders(&pool, cmd.sender.id).await,
 		"first"          => first_message(&pool, &auth, cache_arc, &cmd).await,
 		"remindme"       => add_reminder(&pool, &auth, cache_arc, &cmd, true).await,
 		"remind"         => add_reminder(&pool, &auth, cache_arc, &cmd, false).await,
 		"rose"           => tag_rand_chatter_with_rose(&cmd.channel, &config.disregarded_users).await,
-		"lurk"           => set_lurk_status(&pool, &cmd).await,
-		"offlinetime"    => get_offline_time(&pool, &auth, &cmd).await,
-		"wiki"           => query_wikipedia(&cmd).await,
 		// "translate"      => translate(&cmd).await,
 		"bench"          => bench_command(&pool, client.clone(), config, &auth, cache_arc, cmd.clone()).await,
 		_ if (cmd.cmd.as_str() == &config.prefix.to_string()) => execute_alias(&pool, client.clone(), config, &auth, cache_arc, &cmd).await,
@@ -598,3 +599,16 @@ pub async fn query_wikipedia(
 	todo!()
 }
 
+pub async fn query_dictionary(
+	cmd: &CommandSource,
+) -> anyhow::Result<Option<String>> {
+	let word = match cmd.args.get(0) {
+		Some(w) => w,
+		None    => return Ok(Some("❌ No word provided".into())),
+	};
+	
+	match api::query_dictionary(word).await? {
+		Some(def) => Ok(Some(def)),
+		None      => Ok(Some("❌ word not found".into()))
+	}
+}
