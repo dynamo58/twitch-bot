@@ -34,6 +34,7 @@ A simple sophisticated Twitch bot in Rust.
 | offlinetime    | [name: opt(str)]                     | returns the time a user has thus far spent in offline chat         |
 | wiki           | [phrase: text]                       | tries to query Wikipedia for searched topic/title                  |
 | define         | [word: str]                          | queries a dictionary API for a word definition                     |
+| urban          | [term: text]                         | queries urbandictionary for a phrase                               |
 <!-- | translate      | (from,to) [text]                     | translate some text |  -->
 
 # Get started

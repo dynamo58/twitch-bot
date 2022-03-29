@@ -382,7 +382,7 @@ pub async fn query_dictionary(
 
     let parsed: models::DictionaryResponse = match serde_json::from_str(&res) {
         Ok(tr) => tr,
-        Err(e) => {println!("{e}");return Ok(None)},
+        Err(e) => return Ok(None),
     };
 
     let pronunciation = match &parsed[0].phonetic {
@@ -393,3 +393,34 @@ pub async fn query_dictionary(
 
     Ok(Some(format!("{pronunciation} {definition}")))
 }
+
+pub async fn query_urban_dictionary(
+    term: &str,
+) -> anyhow::Result<Option<String>> {
+    let client = Client::new();
+
+    let res = client
+        .get(&format!("https://api.urbandictionary.com/v0/define?term={term}"))
+        .send()
+        .await?
+        .text()
+        .await?;
+
+    let parsed: models::UrbanDictionaryResponse = serde_json::from_str(&res)?;
+
+    match parsed.list.len() {
+        0 => return Ok(None),
+        _ => {
+            let term    = &parsed.list[0].word;
+            let def     = parsed.list[0].definition.replace("[", "").replace("]", "");
+            let example = parsed.list[0].example.replace("[", "").replace("]", "");
+            let more_defs_count = match parsed.list.len() {
+                0 => "".to_owned(),
+                _ => format!("({} more definitions)", parsed.list.len() - 1),
+            };
+
+            return Ok(Some(format!("{term} - {def} | Example: {example} {more_defs_count}")));
+        },
+    }
+}
+

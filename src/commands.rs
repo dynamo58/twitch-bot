@@ -4,6 +4,7 @@ use crate::{CommandSource, MyError, TwitchAuth, NameIdCache, Config, fmt_duratio
 use crate::db;
 use crate::api;
 
+use std::string;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -31,7 +32,6 @@ pub async fn handle_command(
 		cache.insert(cmd.sender.name.to_owned(), cmd.sender.id);
 	}
 
-
 	let now = Instant::now();
 
 	let cmd_out = match cmd.cmd.as_str() {
@@ -56,6 +56,7 @@ pub async fn handle_command(
 		"remindme"       => add_reminder(&pool, &auth, cache_arc, &cmd, true).await,
 		"remind"         => add_reminder(&pool, &auth, cache_arc, &cmd, false).await,
 		"rose"           => tag_rand_chatter_with_rose(&cmd.channel, &config.disregarded_users).await,
+		"urban"          => query_urban_dictionary(&cmd).await,
 		// "translate"      => translate(&cmd).await,
 		"bench"          => bench_command(&pool, client.clone(), config, &auth, cache_arc, cmd.clone()).await,
 		_ if (cmd.cmd.as_str() == &config.prefix.to_string()) => execute_alias(&pool, client.clone(), config, &auth, cache_arc, &cmd).await,
@@ -334,7 +335,7 @@ async fn markov(
 }
 
 // show additional information about a spec. error
-pub async fn explain (
+async fn explain (
 	pool: &SqlitePool,
 	error_code: &str,
 ) -> anyhow::Result<Option<String>> {
@@ -345,8 +346,8 @@ pub async fn explain (
 	}
 }
 
-// returns the first message of user
-pub async fn first_message(
+// returns the first (logged) message of a user
+async fn first_message(
 	pool:      &SqlitePool,
 	auth:      &TwitchAuth,
 	cache_arc: Arc<Mutex<NameIdCache>>,
@@ -393,7 +394,9 @@ pub async fn first_message(
 	}
 }
 
-pub async fn suggest(
+// user can leave a suggestion, that will
+// get saved into the database
+async fn suggest(
 	pool: &SqlitePool,
 	cmd: &CommandSource,
 ) -> anyhow::Result<Option<String>> {
@@ -413,7 +416,8 @@ pub async fn suggest(
 	Ok(Some("✅ suggestion saved".into()))
 }
 
-pub async fn tag_rand_chatter_with_rose(
+// give a rose to a random chatter in the channel
+async fn tag_rand_chatter_with_rose(
 	channel_name: &str,
 	disregarded_users: &Vec<String>,
 ) -> anyhow::Result<Option<String>> {
@@ -435,7 +439,8 @@ pub async fn tag_rand_chatter_with_rose(
 	Ok(Some(format!("@{rand_chatter} PeepoGlad 🌹")))
 }
 
-pub async fn get_weather_report(
+// get weather report from wttr.in API
+async fn get_weather_report(
 	args: &Vec<String>,
 ) -> anyhow::Result<Option<String>> {
 	if args.len() == 0 {
@@ -451,7 +456,7 @@ pub async fn get_weather_report(
 }
 
 // get uptime of a stream
-pub async fn get_uptime(
+async fn get_uptime(
 	auth: &TwitchAuth,
 	cmd: &CommandSource,
 ) -> anyhow::Result<Option<String>> {
@@ -480,7 +485,8 @@ fn parse_langs(s: &String) -> anyhow::Result<(&str, &str)> {
 	))
 } 
 
-pub async fn translate(
+// translate a phrase
+async fn translate(
 	cmd: &CommandSource,
 ) -> anyhow::Result<Option<String>> {
 	let langs = match cmd.args.get(0) {
@@ -501,7 +507,8 @@ pub async fn translate(
 	Ok(Some(api::translate(src_lang, target_lang, &text).await?))
 }
 
-pub async fn set_lurk_status(
+// go into AFK state
+async fn set_lurk_status(
 	pool: &SqlitePool,
 	cmd: &CommandSource,
 ) -> anyhow::Result<Option<String>> {
@@ -514,7 +521,9 @@ pub async fn set_lurk_status(
 	Ok(Some(format!("{sender_name} is now AFK")))
 }
 
-pub async fn bench_command(
+// measure how long a command takes
+// (requires bot to be vip/mod/...)
+async fn bench_command(
 	pool:       &SqlitePool,
 	client:     TwitchClient,
 	config:     &Config,
@@ -542,7 +551,8 @@ pub async fn bench_command(
 	Ok(Some(format!("{} ms", now.elapsed().as_millis())))
 }
 
-pub async fn get_offline_time(
+// get the time a user has spent in an offline chat
+async fn get_offline_time(
 	pool: &SqlitePool,
 	auth: &TwitchAuth,
 	cmd:  &CommandSource,
@@ -579,7 +589,8 @@ pub async fn get_offline_time(
 	Ok(Some(format!("{offliner_name} has spent {} in {channel_name}'s offline chat!", fmt_duration(t))))
 }
 
-pub async fn query_wikipedia(
+// get the abstract from a wikipedia page
+async fn query_wikipedia(
 	cmd: &CommandSource,
 ) -> anyhow::Result<Option<String>> {
 	let title = &cmd.args.join(" ");
@@ -599,7 +610,8 @@ pub async fn query_wikipedia(
 	todo!()
 }
 
-pub async fn query_dictionary(
+// get a (english only) word definition
+async fn query_dictionary(
 	cmd: &CommandSource,
 ) -> anyhow::Result<Option<String>> {
 	let word = match cmd.args.get(0) {
@@ -610,5 +622,20 @@ pub async fn query_dictionary(
 	match api::query_dictionary(word).await? {
 		Some(def) => Ok(Some(def)),
 		None      => Ok(Some("❌ word not found".into()))
+	}
+}
+
+// get a definiton from urbandictionary
+async fn query_urban_dictionary(
+	cmd: &CommandSource,
+) -> anyhow::Result<Option<String>> {
+	let term = match cmd.args.len() {
+		0 => return Ok(Some("❌ no term provided".into())),
+		_ => cmd.args.join(" "),
+	};
+
+	match api::query_urban_dictionary(&term).await? {
+		Some(ud) => Ok(Some(ud)),
+		None     => Ok(Some("❌ not found".into())),
 	}
 }

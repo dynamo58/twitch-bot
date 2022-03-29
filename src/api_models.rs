@@ -647,3 +647,30 @@ pub struct License2 {
     pub name: String,
     pub url: String,
 }
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UrbanDictionaryResponse {
+    pub list: Vec<List>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct List {
+    pub definition: String,
+    pub permalink: String,
+    #[serde(rename = "thumbs_up")]
+    pub thumbs_up: i64,
+    #[serde(rename = "sound_urls")]
+    pub sound_urls: Vec<String>,
+    pub author: String,
+    pub word: String,
+    pub defid: i64,
+    #[serde(rename = "current_vote")]
+    pub current_vote: String,
+    #[serde(rename = "written_on")]
+    pub written_on: String,
+    pub example: String,
+    #[serde(rename = "thumbs_down")]
+    pub thumbs_down: i64,
+}
