@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use serde::{Deserialize};
 use chrono::{DateTime, Utc};
+// use tracing_subscriber::registry::Data;
 
 // —————————————————————————————————————————
 //               Twitch API
@@ -107,6 +108,7 @@ pub struct Daum {
 #[derive(Default, Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Pagination {
+    pub cursor: Option<String>,
 }
 
 // —————————————————————————————————————————
@@ -674,3 +676,37 @@ pub struct List {
     #[serde(rename = "thumbs_down")]
     pub thumbs_down: i64,
 }
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TwitchFollowResponse {
+    pub total: i64,
+    pub data: Vec<_Daum>,
+    pub pagination: _Pagination,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct _Daum {
+    #[serde(rename = "from_id")]
+    pub from_id: String,
+    #[serde(rename = "from_login")]
+    pub from_login: String,
+    #[serde(rename = "from_name")]
+    pub from_name: String,
+    #[serde(rename = "to_id")]
+    pub to_id: String,
+    #[serde(rename = "to_login")]
+    pub to_login: String,
+    #[serde(rename = "to_name")]
+    pub to_name: String,
+    #[serde(rename = "followed_at")]
+    pub followed_at: DateTime<Utc>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct _Pagination {
+    pub cursor: Option<String>,
+}
+

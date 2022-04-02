@@ -1,0 +1,1 @@
+- rework command error handling to actually be done be err(...)

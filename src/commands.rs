@@ -57,6 +57,7 @@ pub async fn handle_command(
 		"remind"         => add_reminder(&pool, &auth, cache_arc, &cmd, false).await,
 		"rose"           => tag_rand_chatter_with_rose(&cmd.channel, &config.disregarded_users).await,
 		"urban"          => query_urban_dictionary(&cmd).await,
+		"followage"      => get_followage(&cmd, &auth).await,
 		// "translate"      => translate(&cmd).await,
 		"bench"          => bench_command(&pool, client.clone(), config, &auth, cache_arc, cmd.clone()).await,
 		_ if (cmd.cmd.as_str() == &config.prefix.to_string()) => execute_alias(&pool, client.clone(), config, &auth, cache_arc, &cmd).await,
@@ -637,5 +638,45 @@ async fn query_urban_dictionary(
 	match api::query_urban_dictionary(&term).await? {
 		Some(ud) => Ok(Some(ud)),
 		None     => Ok(Some("❌ not found".into())),
+	}
+}
+
+async fn get_followage(
+	cmd: &CommandSource,
+	twitch_auth: &TwitchAuth,
+) -> anyhow::Result<Option<String>> {
+	let (channel_name, channel_id) = match cmd.args.len() {
+		0 => (&cmd.channel, api::id_from_nick(&cmd.channel, twitch_auth).await?),
+		1 => (&cmd.channel, api::id_from_nick(&cmd.channel, twitch_auth).await?),
+		_ => (&cmd.args[1], api::id_from_nick(&cmd.args[1], twitch_auth).await?),
+	};
+
+	let channel_id = match channel_id {
+		Some(id) => id,
+		None => return Ok(Some(format!("❌ channel {channel_name} does not exist"))),
+	};
+
+	let (user_name, user_id) = match cmd.args.len() {
+		0 => (&cmd.sender.name, Some(cmd.sender.id)),
+		_ => (&cmd.args[0], api::id_from_nick(&cmd.args[0], twitch_auth).await?),
+	};
+
+	let user_id = match user_id {
+		Some(id) => id,
+		None => return Ok(Some(format!("❌ user {user_name} does not exist"))),
+	}; 
+
+	match api::get_followage(twitch_auth, channel_id, user_id).await? {
+		Some(date) => {
+			let duration = (Utc::now() - date).num_days();
+			let years = duration as f32 / 365.24;
+
+			if years > 0.5 {
+				return Ok(Some(format!("⏱️ {user_name} has been following {channel_name} for {years:.2} years")));
+			} else {
+				return Ok(Some(format!("⏱️ {user_name} has been following {channel_name} for {duration} days")));
+			}
+		},
+		None       => return Ok(Some(format!("❌ {user_name} does not follow {channel_name}"))),
 	}
 }

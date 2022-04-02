@@ -35,6 +35,7 @@ A simple sophisticated Twitch bot in Rust.
 | wiki           | [phrase: text]                       | tries to query Wikipedia for searched topic/title                  |
 | define         | [word: str]                          | queries a dictionary API for a word definition                     |
 | urban          | [term: text]                         | queries urbandictionary for a phrase                               |
+| followage      | [user: opt(str)] [channel: opt(str)] | get the amount of time a user has been following a channel         |
 <!-- | translate      | (from,to) [text]                     | translate some text |  -->
 
 # Get started

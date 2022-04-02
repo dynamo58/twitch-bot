@@ -350,6 +350,7 @@ pub async fn translate(
     // Ok(info.translations[0].text.clone())
 }
 
+// query wikipedia for an article gist
 pub async fn query_wikipedia(
     phrase: &str,
 ) -> anyhow::Result<Option<WikiResponse>> {
@@ -368,6 +369,7 @@ pub async fn query_wikipedia(
     }
 }
 
+// query the english dictionary for an entry
 pub async fn query_dictionary(
     word: &str,
 ) -> anyhow::Result<Option<String>> {
@@ -394,6 +396,7 @@ pub async fn query_dictionary(
     Ok(Some(format!("{pronunciation} {definition}")))
 }
 
+// query urban dictionary for an entry
 pub async fn query_urban_dictionary(
     term: &str,
 ) -> anyhow::Result<Option<String>> {
@@ -424,3 +427,28 @@ pub async fn query_urban_dictionary(
     }
 }
 
+// ref: https://dev.twitch.tv/docs/api/reference#get-users-follows
+// get the date of the follow of a user of a channel.... what?
+pub async fn get_followage(
+    auth: &TwitchAuth,
+    channel_id: i32,
+    user_id: i32
+) -> anyhow::Result<Option<DateTime<Utc>>> {
+    let client = Client::new();
+
+    let res = client
+        .get(&format!("https://api.twitch.tv/helix/users/follows?to_id={channel_id}&from_id={user_id}"))
+        .header("Client-ID", auth.client_id.clone())
+        .header("Authorization", format!("Bearer {}", auth.oauth.clone()))
+        .send()
+        .await?
+        .text()
+        .await?;
+
+    let parsed: models::TwitchFollowResponse = serde_json::from_str(&res)?;
+
+    match parsed.total {
+        0 => Ok(None),
+        _ => Ok(Some(parsed.data[0].followed_at)),
+    }
+}
