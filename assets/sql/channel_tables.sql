@@ -3,7 +3,8 @@ CREATE TABLE IF NOT EXISTS {{ CHANNEL_NAME }} (
 	sender_id   INTEGER NOT NULL,
 	sender_nick TEXT NOT NULL,
 	badges      TEXT,
-	timestamp   TEXT NOT NULL
+	timestamp   TEXT NOT NULL,
+	message     TEXT
 );
 
 CREATE TABLE IF NOT EXISTS {{ CHANNEL_NAME }}_MARKOV (
@@ -16,4 +17,12 @@ CREATE TABLE IF NOT EXISTS {{ CHANNEL_NAME }}_OFFLINERS (
 	id          INTEGER PRIMARY KEY,
 	offliner_id INTEGER NOT NULL UNIQUE,
 	time_s      INTEGER DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS {{ CHANNEL_NAME }}_COMMANDS (
+	id          INTEGER PRIMARY KEY,
+	name        TEXT NOT NULL UNIQUE,
+	type        TEXT NOT NULL UNIQUE,
+	expression  TEXT NOT NULL,
+	metadata    INTEGER DEFAULT 0
 );

@@ -11,34 +11,35 @@ A simple sophisticated Twitch bot in Rust.
 
 # Commands
 
-| Command        | Args                                 | Description                                                        |
-| ---            | ---                                  | ---                                                                |
-| ping           | None                                 | responds with "pong"                                               |
-| explain        | [error code: str]                    | tries to respond with error in assets/explanations                 |
-| markov         | [start: str] [count: int]            | responds with a markov chain generated from saved chat messages    |
-| echo           | [text]                               | repeats user's message                                             |
-| say            | [text]                               | alias for `echo`                                                   |
-| remind         | (xh,xm) [user: str] [text]           | reminds user when he types if spec. amouunt of time has passed     |
-| remindme       | (xh,xm) [text]                       | shortcut for reminding one's self                                  |
-| clearreminders | None                                 | clears all reminders the user has set (that are still pending)     |
-| rmrm           | None                                 | alias for the `clearreminders` command                             |
-| setalias       | [name: str] [cmd expression]         | set an alias for caller (like a substitue for specificied command) |
-| \[prefix\]     | [alias name: str]                    | execute an alias                                                   |
-| rmalias        | [alias name: str]                    | remove an alias                                                    |
-| first          | [nick: opt(str)] [channel: opt(str)] | get the first logged message of a user (in any channel)            |
-| rose           | None                                 | send a rose to a random fellow chatter!                            |
-| weather        | [location: text]                     | get weather report from specified location                         |
-| accage         | [name: opt(str)]                     | get the account age of spec. user or one's self                    |
-| lurk           | None                                 | go into lurk mode (gets removed upon next message)                 |
-| bench          | Command                              | measure how long a command takes to execute                        |
-| offlinetime    | [name: opt(str)]                     | returns the time a user has thus far spent in offline chat         |
-| wiki           | [phrase: text]                       | tries to query Wikipedia for searched topic/title                  |
-| define         | [word: str]                          | queries a dictionary API for a word definition                     |
-| urban          | [term: text]                         | queries urbandictionary for a phrase                               |
-| followage      | [user: opt(str)] [channel: opt(str)] | get the amount of time a user has been following a channel         |
+| Command        | Args                                         | Description                                                        | Required status
+| ---            | ---                                          | ---                                                                | ---
+| ping           | None                                         | responds with "pong"                                               | None
+| explain        | [error code: str]                            | tries to respond with error in assets/explanations                 | None
+| markov         | [start: str] [count: int]                    | responds with a markov chain generated from saved chat messages    | None
+| echo           | [text]                                       | repeats user's message                                             | None
+| say            | [text]                                       | alias for `echo`                                                   | None
+| remind         | (xh,xm) [user: str] [text]                   | reminds user when he types if spec. amouunt of time has passed     | None
+| remindme       | (xh,xm) [text]                               | shortcut for reminding one's self                                  | None
+| clearreminders | None                                         | clears all reminders the user has set (that are still pending)     | None
+| rmrm           | None                                         | alias for the `clearreminders` command                             | None
+| setalias       | [name: str] [cmd expression]                 | set an alias for caller (like a substitue for specificied command) | None
+| \[prefix\]     | [alias name: str]                            | execute an alias                                                   | None
+| rmalias        | [alias name: str]                            | remove an alias                                                    | None
+| first          | [nick: opt(str)] [channel: opt(str)]         | get the first logged message of a user (in any channel)            | None
+| rose           | None                                         | send a rose to a random fellow chatter!                            | None
+| weather        | [location: text]                             | get weather report from specified location                         | None
+| accage         | [name: opt(str)]                             | get the account age of spec. user or one's self                    | None
+| lurk           | None                                         | go into lurk mode (gets removed upon next message)                 | None
+| bench          | Command                                      | measure how long a command takes to execute                        | None
+| offlinetime    | [name: opt(str)]                             | returns the time a user has thus far spent in offline chat         | None
+| wiki           | [phrase: text]                               | tries to query Wikipedia for searched topic/title                  | None
+| define         | [word: str]                                  | queries a dictionary API for a word definition                     | None
+| urban          | [term: text]                                 | queries urbandictionary for a phrase                               | None
+| followage      | [user: opt(str)] [channel: opt(str)]         | get the amount of time a user has been following a channel         | None
+| newcmd         | [type: templ\|paste\|incr] [expression: str] | create a new channel command                                       | Broadcaster / Moderator / VIP         
 <!-- | translate      | (from,to) [text]                     | translate some text |  -->
 
-# Get started
+# Run yourself
 
 1. `git clone https://github.com/dynamo58/twitch-bot`
 2. rename `.env.example` to `.env` and enter your information (you can get it [here](https://chatterino.com/client_login))

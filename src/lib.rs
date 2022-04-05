@@ -23,6 +23,21 @@ pub enum MyError {
 	NotFound,
 }
 
+// All the statuses one can have in Twitch chat
+#[derive(Clone, PartialEq)]
+pub enum TwitchBadge {
+	Broadcaster,
+	Admin,
+	GlobalMod,
+	Mod,
+	Staff,
+	Subscriber,
+	Vip,
+	Premium,
+	GlitchCon2020,
+	Unrecognized,
+}
+
 // twitch authentification credentials
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TwitchAuth {
@@ -68,25 +83,11 @@ impl Config {
 	}
 }
 
-// All the statuses one can have in Twitch chat
-#[derive(Clone)]
-pub enum TwitchStatus {
-	Broadcaster,
-	Admin,
-	GlobalMod,
-	Mod,
-	Staff,
-	Subscriber,
-	Vip,
-	Premium,
-	GlitchCon2020,
-	Unrecognized,
-}
-
 #[derive(Clone)]
 pub struct Sender {
 	pub id: i32,
 	pub name: String,
+	pub statuses: Vec<TwitchBadge>,
 }
 
 // the only info which is important and
@@ -97,7 +98,6 @@ pub struct CommandSource {
 	pub args: Vec<String>,
 	pub sender: Sender,
 	pub channel: String,
-	pub statuses: Vec<TwitchStatus>,
 	pub timestamp: DateTime<Utc>,
 }
 
@@ -111,25 +111,19 @@ impl CommandSource {
 		let cmd = args[0].to_lowercase()[1..].to_owned();
 		args = args[1..].to_owned();
 
-		let sender = Sender {
-			                                    // will always be valid
-			id: privmsg.sender.id.parse::<i32>().unwrap(),
-			name: privmsg.sender.name
-		};
-
 		// parse badges
-		let badges: Vec<TwitchStatus> = privmsg.badges
+		let badges: Vec<TwitchBadge> = privmsg.badges
 			.into_iter()
 			.map(|badge| match badge.name.as_str() {
-				"admin"       => TwitchStatus::Admin,
-				"broadcaster" => TwitchStatus::Broadcaster,
-				"global_mod"  => TwitchStatus::GlobalMod,
-				"moderator"   => TwitchStatus::Mod,
-				"staff"       => TwitchStatus::Staff,
-				"subscriber"  => TwitchStatus::Subscriber,
-				"vip"         => TwitchStatus::Vip,
-				"premium"     => TwitchStatus::Premium,
-				"glitchcon2020" => TwitchStatus::GlitchCon2020,
+				"admin"       => TwitchBadge::Admin,
+				"broadcaster" => TwitchBadge::Broadcaster,
+				"global_mod"  => TwitchBadge::GlobalMod,
+				"moderator"   => TwitchBadge::Mod,
+				"staff"       => TwitchBadge::Staff,
+				"subscriber"  => TwitchBadge::Subscriber,
+				"vip"         => TwitchBadge::Vip,
+				"premium"     => TwitchBadge::Premium,
+				"glitchcon2020" => TwitchBadge::GlitchCon2020,
 				_ => {
 					println!(
 						"{} Encountered unrecognized badge: {}",
@@ -137,24 +131,28 @@ impl CommandSource {
 						badge.name.bold()
 					);
 					
-					TwitchStatus::Unrecognized
+					TwitchBadge::Unrecognized
 				}
 		})
 		.collect();
+
+		let sender = Sender {
+			id: privmsg.sender.id.parse::<i32>().unwrap(),
+			name: privmsg.sender.name,
+			statuses: badges,
+		};
 
 		Self {
 			cmd: cmd,
 			args: args,
 			sender: sender,
 			channel: privmsg.source.params[0][1..].to_owned(),
-			statuses: badges,
 			timestamp: privmsg.server_timestamp,
 		}
 	}
 }
 
 pub type NameIdCache = HashMap<String, i32>;
-
 
 #[derive(Clone)]
 pub struct EmoteCache {

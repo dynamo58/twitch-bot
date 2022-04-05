@@ -4,7 +4,17 @@ mod commands;
 mod db;
 mod background;
 
-use twitch_bot::{Config, CommandSource, MyError, TwitchAuth, NameIdCache, EmoteCache, Cashe, fmt_duration};
+use twitch_bot::{
+	Config,
+	CommandSource,
+	MyError,
+	TwitchAuth, 
+	Cashe,
+	TwitchBadge,
+	fmt_duration,
+	NameIdCache,
+	EmoteCache
+};
 use background as bg;
 use commands::handle_command;
 

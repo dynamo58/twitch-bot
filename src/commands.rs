@@ -1,10 +1,17 @@
 #![allow(unused)]
 
-use crate::{CommandSource, MyError, TwitchAuth, NameIdCache, Config, fmt_duration};
 use crate::db;
 use crate::api;
+use crate::{
+	CommandSource,
+	MyError,
+	TwitchAuth,
+	TwitchBadge,
+	NameIdCache,
+	Config,
+	fmt_duration,
+};
 
-use std::string;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -12,6 +19,7 @@ use async_recursion::async_recursion;
 use chrono::{Duration, Utc};
 use rand::{self, Rng};
 use sqlx::sqlite::SqlitePool;
+use thiserror::Error as ThisError;
 
 type TwitchClient = twitch_irc::TwitchIRCClient<twitch_irc::transport::tcp::TCPTransport<twitch_irc::transport::tcp::TLS>, twitch_irc::login::StaticLoginCredentials>;
 
@@ -39,6 +47,7 @@ pub async fn handle_command(
 		"echo"           => echo(&cmd.args),
 		"say"            => echo(&cmd.args),
 		"markov"         => markov(&pool, &cmd).await,
+		"newcmd"         => new_cmd(&pool, &cmd).await,
 		"suggest"        => suggest(&pool, &cmd).await,
 		"wiki"           => query_wikipedia(&cmd).await,
 		"define"         => query_dictionary(&cmd).await,
@@ -46,6 +55,9 @@ pub async fn handle_command(
 		"uptime"         => get_uptime(&auth, &cmd).await,
 		"accage"         => get_accage(&auth, &cmd).await,
 		"rmalias"        => remove_alias(&pool, &cmd).await,
+		"followage"      => get_followage(&cmd, &auth).await,
+		"delcmd"         => remove_channel_command(&pool, &cmd).await,
+		"urban"          => query_urban_dictionary(&cmd).await,
 		"lurk"           => set_lurk_status(&pool, &cmd).await,
 		"explain"        => explain(&pool, &cmd.args[0]).await,
 		"weather"        => get_weather_report(&cmd.args).await,
@@ -56,15 +68,12 @@ pub async fn handle_command(
 		"remindme"       => add_reminder(&pool, &auth, cache_arc, &cmd, true).await,
 		"remind"         => add_reminder(&pool, &auth, cache_arc, &cmd, false).await,
 		"rose"           => tag_rand_chatter_with_rose(&cmd.channel, &config.disregarded_users).await,
-		"urban"          => query_urban_dictionary(&cmd).await,
-		"followage"      => get_followage(&cmd, &auth).await,
-		// "translate"      => translate(&cmd).await,
 		"bench"          => bench_command(&pool, client.clone(), config, &auth, cache_arc, cmd.clone()).await,
 		_ if (cmd.cmd.as_str() == &config.prefix.to_string()) => execute_alias(&pool, client.clone(), config, &auth, cache_arc, &cmd).await,
-		_ => Ok(None),
+		_ => execute_channel_command(&pool, &cmd).await,
+		// "translate"      => translate(&cmd).await,
 	};
 
-	
 	let cmd_out = match cmd_out {
 		Ok(content) => content,
 		Err(e)      => {
@@ -168,7 +177,6 @@ async fn execute_alias(
 		},
 		channel: cmd.channel.clone(),
 		sender: cmd.sender.clone(),
-		statuses: cmd.statuses.clone(),
 		timestamp: cmd.timestamp.clone(),
 	};
 
@@ -182,7 +190,6 @@ async fn remove_alias(
 	pool: &SqlitePool,
 	cmd: &CommandSource,
 ) -> anyhow::Result<Option<String>> {
-
 	let alias = match cmd.args.get(0) {
 		Some(a) => a.to_owned(),
 		None => return Ok(Some("❌ no alias provided".into()))
@@ -543,7 +550,6 @@ async fn bench_command(
 		},
 		channel: cmd.channel.clone(),
 		sender: cmd.sender.clone(),
-		statuses: cmd.statuses.clone(),
 		timestamp: cmd.timestamp.clone(),
 	};
 
@@ -678,5 +684,93 @@ async fn get_followage(
 			}
 		},
 		None       => return Ok(Some(format!("❌ {user_name} does not follow {channel_name}"))),
+	}
+}
+
+async fn new_cmd(
+	pool: &SqlitePool,
+	cmd: &CommandSource,
+) -> anyhow::Result<Option<String>> {
+	if !(
+		cmd.sender.statuses.contains(&TwitchBadge::Broadcaster) ||
+		cmd.sender.statuses.contains(&TwitchBadge::Mod)         ||
+		cmd.sender.statuses.contains(&TwitchBadge::Vip)
+	) {
+		return Ok(Some("❌ not high enough status".into()));
+	}
+
+	let cmd_name = match cmd.args.get(0) {
+		Some(name) => name,
+		None       => return Ok(Some("❌ no name provided".into())),
+	};
+
+	let cmd_type = match cmd.args.get(1) {
+		Some(type_) => type_,
+		None       => return Ok(Some("❌ no type provided".into())),
+	};
+
+	if !(
+		cmd_type == "paste" ||
+		cmd_type == "templ" ||
+		cmd_type == "incr"
+	) {
+		return Ok(Some("❌ command type not recognized".into()));
+	}
+
+	let cmd_expr = match cmd.args.get(2) {
+		Some(name) => cmd.args[2..].join(" "),
+		None       => return Ok(Some("❌ no expression provided".into())),
+	};
+
+	db::new_cmd(pool, &cmd.channel, cmd_name, cmd_type, &cmd_expr).await?;
+
+	Ok(Some("🔧 command created successfully".into()))
+}
+
+pub async fn execute_channel_command(
+	pool: &SqlitePool,
+	cmd: &CommandSource,
+) -> anyhow::Result<Option<String>> {
+	let cmd_name = cmd.cmd.as_str();
+
+	let (cmd_type, cmd_expr, cmd_meta) = match db::get_channel_cmd(pool, &cmd.channel, cmd_name).await? {
+		Some(cmd) => cmd,
+		None => return Ok(Some("❌ command not recognized".into())),
+	};
+
+	let mut out = cmd_expr.clone();
+
+	if (cmd_type == "templ") {
+		for i in 0..cmd.args.len() {
+			out = out.replace(&format!("{{{}}}", i+1), &cmd.args[i]);
+		}
+
+		return Ok(Some(out));
+	}
+
+	if (cmd_type == "paste") {
+		return Ok(Some(out));
+	}
+
+	if (cmd_type == "incr") {
+		return Ok(Some(out.replace(&"{}", &format!("{cmd_meta}"))));
+	}
+
+	// unreachable unless some obscure error occures
+	Ok(None)
+}
+
+pub async fn remove_channel_command(
+	pool: &SqlitePool,
+	cmd: &CommandSource,
+) -> anyhow::Result<Option<String>> {
+	let cmd_name = match cmd.args.get(0) {
+		Some(a) => a,
+		None => return Ok(Some("❌ no command name provided".into()))
+	};
+
+	match db::remove_channel_command(pool, &cmd.channel, cmd_name).await? {
+		0 => return Ok(Some("❌ no such command existed".into())),
+		_ => return Ok(Some("✅ removed successfully".into())),
 	}
 }

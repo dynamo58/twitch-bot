@@ -18,7 +18,10 @@ struct StringQR(String);
 struct I32QR(i32);
 
 #[derive(sqlx::FromRow)]
-struct DateTImeQR(DateTime<Utc>);
+struct DateTimeQR(DateTime<Utc>);
+
+#[derive(sqlx::FromRow)]
+struct ChannelCommandQR(String, String, i32);
 
 #[derive(sqlx::FromRow, Debug)]
 pub struct Reminder {
@@ -592,7 +595,7 @@ pub async fn is_lurker(
 				lurker_id=?1;
 	"#;
 
-	let lurkers: Vec<DateTImeQR> = sqlx::query_as::<Sqlite, DateTImeQR>(&sql)
+	let lurkers: Vec<DateTimeQR> = sqlx::query_as::<Sqlite, DateTimeQR>(&sql)
 		.bind(sender_id)
 		.fetch_all(&mut *conn)
 		.await?;
@@ -634,8 +637,8 @@ pub async fn add_offliner_minute(
         VALUES
 	        (?1, 60)
 		ON CONFLICT
-		DO
-			UPDATE SET  time_s = time_s + 60
+		DO UPDATE
+			SET time_s = time_s + 60
     "#.replace("{{ CHANNEL_NAME }}", channel_name);
 
 	sqlx::query::<Sqlite>(&sql)
@@ -671,4 +674,86 @@ pub async fn get_offline_time(
 		Some(a) => return Ok(chrono::Duration::seconds(a.0 as i64)),
 		None    => return Ok(chrono::Duration::seconds(0         )),
 	}
+}
+
+pub async fn new_cmd(
+	pool: &SqlitePool,
+	channel_name: &str,
+	cmd_name: &str,
+	cmd_type: &str,
+	cmd_expr: &str
+) -> anyhow::Result<()> {
+	let mut conn = pool.acquire().await?;
+
+    let sql = r#"
+    INSERT OR REPLACE
+        INTO {{ TABLE_NAME }}_COMMANDS
+	        (name, type, expression)
+        VALUES
+	        (?1, ?2, ?3)
+    "#.replace("{{ TABLE_NAME }}", channel_name);
+
+	sqlx::query::<Sqlite>(&sql)
+		.bind(cmd_name)
+		.bind(cmd_type)
+		.bind(cmd_expr)
+		.execute(&mut *conn)
+		.await?;
+	
+	Ok(())
+}
+
+pub async fn get_channel_cmd(
+    pool:         &SqlitePool,
+    channel_name: &str,
+    cmd_name:     &str,
+) -> anyhow::Result<Option<(String, String, i32)>> {
+	let mut conn = pool.acquire().await?;
+
+	let sql = r#"
+		UPDATE {{ CHANNEL_NAME }}_COMMANDS
+		SET
+			metadata = metadata + 1
+		WHERE
+			name=?1;
+		SELECT type, expression, metadata 
+			FROM {{ CHANNEL_NAME }}_COMMANDS
+			WHERE
+				name=?1
+	"#.replace("{{ CHANNEL_NAME }}", channel_name);
+
+	let cmds: Vec<ChannelCommandQR> = sqlx::query_as::<Sqlite, ChannelCommandQR>(&sql)
+		.bind(cmd_name)
+		.fetch_all(&mut *conn)
+		.await?;
+
+	if cmds.len() == 0 {
+		return Ok(None);
+	} else {
+		return Ok(Some((cmds[0].0.clone(), cmds[0].1.clone(), cmds[0].2)));
+	}
+}
+
+pub async fn remove_channel_command(
+	pool:         &SqlitePool,
+	channel_name: &str,
+	cmd_name:     &str,
+) -> anyhow::Result<i32> {
+	let mut conn = pool.acquire().await?;
+
+	let sql = r#"
+		DELETE
+			FROM {{ CHANNEL_NAME }}_COMMANDS
+			WHERE
+				name=?1;
+		SELECT changes();
+	"#.replace("{{ CHANNEL_NAME }}", channel_name);
+
+	let num_affected: i32 = sqlx::query_as::<Sqlite, I32QR>(&sql)
+		.bind(cmd_name)
+		.fetch_all(&mut *conn)
+		.await?
+		[0].0;
+
+	Ok(num_affected)
 }
