@@ -709,4 +709,3 @@ pub struct _Daum {
 pub struct _Pagination {
     pub cursor: Option<String>,
 }
-

@@ -13,30 +13,30 @@ A simple sophisticated Twitch bot in Rust.
 
 | Command        | Args                                         | Description                                                        | Required status
 | ---            | ---                                          | ---                                                                | ---
-| ping           | None                                         | responds with "pong"                                               | None
-| explain        | [error code: str]                            | tries to respond with error in assets/explanations                 | None
-| markov         | [start: str] [count: int]                    | responds with a markov chain generated from saved chat messages    | None
+| \[prefix\]     | [alias name: str]                            | execute an alias                                                   | None
+| accage         | [name: opt(str)]                             | get the account age of spec. user or one's self                    | None
+| bench          | Command                                      | measure how long a command takes to execute                        | None
+| followage      | [user: opt(str)] [channel: opt(str)]         | get the amount of time a user has been following a channel         | None
+| clearreminders | None                                         | clears all reminders the user has set (that are still pending)     | None
+| define         | [word: str]                                  | queries a dictionary API for a word definition                     | None
 | echo           | [text]                                       | repeats user's message                                             | None
-| say            | [text]                                       | alias for `echo`                                                   | None
+| explain        | [error code: str]                            | tries to respond with error in assets/explanations                 | None
+| first          | [nick: opt(str)] [channel: opt(str)]         | get the first logged message of a user (in any channel)            | None
+| lurk           | None                                         | go into lurk mode (gets removed upon next message)                 | None
+| markov         | [start: str] [count: int]                    | responds with a markov chain generated from saved chat messages    | None
+| newcmd         | [type: templ\|paste\|incr] [expression: str] | create a new channel command                                       | Broadcaster / Moderator / VIP         
+| offlinetime    | [name: opt(str)]                             | returns the time a user has thus far spent in offline chat         | None
+| ping           | None                                         | responds with "pong"                                               | None
 | remind         | (xh,xm) [user: str] [text]                   | reminds user when he types if spec. amouunt of time has passed     | None
 | remindme       | (xh,xm) [text]                               | shortcut for reminding one's self                                  | None
-| clearreminders | None                                         | clears all reminders the user has set (that are still pending)     | None
-| rmrm           | None                                         | alias for the `clearreminders` command                             | None
-| setalias       | [name: str] [cmd expression]                 | set an alias for caller (like a substitue for specificied command) | None
-| \[prefix\]     | [alias name: str]                            | execute an alias                                                   | None
-| rmalias        | [alias name: str]                            | remove an alias                                                    | None
-| first          | [nick: opt(str)] [channel: opt(str)]         | get the first logged message of a user (in any channel)            | None
 | rose           | None                                         | send a rose to a random fellow chatter!                            | None
-| weather        | [location: text]                             | get weather report from specified location                         | None
-| accage         | [name: opt(str)]                             | get the account age of spec. user or one's self                    | None
-| lurk           | None                                         | go into lurk mode (gets removed upon next message)                 | None
-| bench          | Command                                      | measure how long a command takes to execute                        | None
-| offlinetime    | [name: opt(str)]                             | returns the time a user has thus far spent in offline chat         | None
-| wiki           | [phrase: text]                               | tries to query Wikipedia for searched topic/title                  | None
-| define         | [word: str]                                  | queries a dictionary API for a word definition                     | None
+| rmalias        | [alias name: str]                            | remove an alias                                                    | None
+| rmrm           | None                                         | alias for the `clearreminders` command                             | None
+| say            | [text]                                       | alias for `echo`                                                   | None
+| setalias       | [name: str] [cmd expression]                 | set an alias for caller (like a substitue for specificied command) | None
 | urban          | [term: text]                                 | queries urbandictionary for a phrase                               | None
-| followage      | [user: opt(str)] [channel: opt(str)]         | get the amount of time a user has been following a channel         | None
-| newcmd         | [type: templ\|paste\|incr] [expression: str] | create a new channel command                                       | Broadcaster / Moderator / VIP         
+| weather        | [location: text]                             | get weather report from specified location                         | None
+| wiki           | [phrase: text]                               | tries to query Wikipedia for searched topic/title                  | None
 <!-- | translate      | (from,to) [text]                     | translate some text |  -->
 
 # Run yourself

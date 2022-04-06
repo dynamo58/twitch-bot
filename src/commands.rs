@@ -69,6 +69,7 @@ pub async fn handle_command(
 		"remind"         => add_reminder(&pool, &auth, cache_arc, &cmd, false).await,
 		"rose"           => tag_rand_chatter_with_rose(&cmd.channel, &config.disregarded_users).await,
 		"bench"          => bench_command(&pool, client.clone(), config, &auth, cache_arc, cmd.clone()).await,
+		"wordratio"      => get_word_ratio(&pool, &auth, &cmd, config.prefix).await,
 		_ if (cmd.cmd.as_str() == &config.prefix.to_string()) => execute_alias(&pool, client.clone(), config, &auth, cache_arc, &cmd).await,
 		_ => execute_channel_command(&pool, &cmd).await,
 		// "translate"      => translate(&cmd).await,
@@ -773,4 +774,27 @@ pub async fn remove_channel_command(
 		0 => return Ok(Some("❌ no such command existed".into())),
 		_ => return Ok(Some("✅ removed successfully".into())),
 	}
+}
+
+pub async fn get_word_ratio(
+	pool:   &SqlitePool,
+	auth:   &TwitchAuth,
+	cmd:    &CommandSource,
+	cmd_prefix: char,
+) -> anyhow::Result<Option<String>> {
+	let (user_name, user_id, word) = match cmd.args.len() {
+		0 => return Ok(Some("❌ no word provided".into())),
+		1 => (&cmd.sender.name, cmd.sender.id, &cmd.args[0]),
+		_ => {
+			let user_id = api::id_from_nick(&cmd.args[0], auth).await?;
+
+			if let Some(id) = user_id {
+				(&cmd.args[0], id, &cmd.args[1])
+			} else {
+				return Ok(Some("❌ user does not exist".into()));
+			}
+		}
+	};
+
+	Ok(Some(format!("{:.2}% of tracked {user_name}'s messages in this channel contain the word {word}", db::get_word_ratio(pool, &cmd.channel, user_id, word, cmd_prefix).await? * 100.)))
 }

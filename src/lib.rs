@@ -36,6 +36,8 @@ pub enum TwitchBadge {
 	Premium,
 	GlitchCon2020,
 	Unrecognized,
+	GLHFPledge,
+	Bits,
 }
 
 // twitch authentification credentials
@@ -115,15 +117,17 @@ impl CommandSource {
 		let badges: Vec<TwitchBadge> = privmsg.badges
 			.into_iter()
 			.map(|badge| match badge.name.as_str() {
-				"admin"       => TwitchBadge::Admin,
-				"broadcaster" => TwitchBadge::Broadcaster,
-				"global_mod"  => TwitchBadge::GlobalMod,
-				"moderator"   => TwitchBadge::Mod,
-				"staff"       => TwitchBadge::Staff,
-				"subscriber"  => TwitchBadge::Subscriber,
-				"vip"         => TwitchBadge::Vip,
-				"premium"     => TwitchBadge::Premium,
+				"admin"         => TwitchBadge::Admin,
+				"broadcaster"   => TwitchBadge::Broadcaster,
+				"global_mod"    => TwitchBadge::GlobalMod,
+				"moderator"     => TwitchBadge::Mod,
+				"staff"         => TwitchBadge::Staff,
+				"subscriber"    => TwitchBadge::Subscriber,
+				"vip"           => TwitchBadge::Vip,
+				"premium"       => TwitchBadge::Premium,
 				"glitchcon2020" => TwitchBadge::GlitchCon2020,
+				"glhf-pledge"   => TwitchBadge::GLHFPledge,
+				"bits"          => TwitchBadge::Bits,
 				_ => {
 					println!(
 						"{} Encountered unrecognized badge: {}",

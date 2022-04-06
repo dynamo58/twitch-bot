@@ -757,3 +757,57 @@ pub async fn remove_channel_command(
 
 	Ok(num_affected)
 }
+
+pub async fn get_word_ratio(
+	pool: &SqlitePool,
+	channel_name: &str,
+	user_id:      i32,
+	word:         &str,
+	cmd_prefix:   char,
+) -> anyhow::Result<f32> {
+	let mut conn = pool.acquire().await?;
+
+	let with_word_count;
+	let total_count;
+
+	// get the count of rows which contain `word`
+	let sql = r#"
+		SELECT COUNT(*)
+			FROM {{ CHANNEL_NAME }}
+			WHERE
+				sender_id=?1
+			AND 
+				message LIKE '%?2%'
+			AND
+				message NOT LIKE '?3%'
+	"#
+		.replace("{{ CHANNEL_NAME }}", channel_name)
+		// the sqlx templating does not work,
+		// so i am manually replacing it here
+		.replace("?2", word)
+		.replace("?3", &cmd_prefix.to_string());
+
+	with_word_count = sqlx::query_as::<Sqlite, I32QR>(&sql)
+		.bind(user_id)
+		.fetch_all(&mut *conn)
+		.await?[0].0;
+
+	// get total message count
+	let sql = r#"
+		SELECT COUNT(*)
+			FROM {{ CHANNEL_NAME }}
+		WHERE
+			sender_id=?1
+		AND
+			message NOT LIKE '?2%';
+	"#
+		.replace("{{ CHANNEL_NAME }}", channel_name)
+		.replace("?2", &cmd_prefix.to_string());
+
+	total_count = sqlx::query_as::<Sqlite, I32QR>(&sql)
+		.bind(user_id)
+		.fetch_all(&mut *conn)
+		.await?[0].0;
+	
+	Ok(with_word_count as f32 / total_count as f32)
+}
