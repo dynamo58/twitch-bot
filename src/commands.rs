@@ -44,6 +44,7 @@ pub async fn handle_command(
 
 	let cmd_out = match cmd.cmd.as_str() {
 		"ping"           => ping(),
+		"decide"         => decide(&cmd),
 		"echo"           => echo(&cmd.args),
 		"say"            => echo(&cmd.args),
 		"markov"         => markov(&pool, &cmd).await,
@@ -796,5 +797,36 @@ pub async fn get_word_ratio(
 		}
 	};
 
-	Ok(Some(format!("{:.2}% of tracked {user_name}'s messages in this channel contain the word {word}", db::get_word_ratio(pool, &cmd.channel, user_id, word, cmd_prefix).await? * 100.)))
+	Ok(
+		Some(
+			format!(
+				"{:.2}% of tracked {user_name}'s messages in this channel contain the word {word}",
+				db::get_word_ratio(pool, &cmd.channel, user_id, word, cmd_prefix).await? * 100.,
+			)
+		)
+	)
 }
+
+// parses the args into a list of (comma-separated) decisions,
+// choses one of them at random and returns it
+pub async fn decide(
+	cmd: &CommandSource,
+) -> Option<String> {
+	match cmd.args.len() {
+		0 => return Some("❌ no options provided"),
+		_ => {
+			let options = cmd.args
+				.join(" ")
+				.split(",")
+				.collect::<Vec<String>>();
+			
+			let rand_opt = options[
+					rand::thread_rng()
+						.gen_range(0..options.len())
+			].clone();
+
+			return Some(format!("🎱 I choose... {rand_opt}"));
+		}
+	}
+}
+
