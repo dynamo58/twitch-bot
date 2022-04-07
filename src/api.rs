@@ -452,3 +452,9 @@ pub async fn get_followage(
         _ => Ok(Some(parsed.data[0].followed_at)),
     }
 }
+
+pub async fn upload_to_pastebin(
+    text: &str,
+) -> anyhow::Result<Option<String>> {
+    todo!()
+}

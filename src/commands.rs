@@ -34,7 +34,8 @@ pub async fn handle_command(
 	auth:       &TwitchAuth,
 	cache_arc: Arc<Mutex<NameIdCache>>,
 	cmd:        CommandSource,
-) -> anyhow::Result<()> {
+	is_pipe:    bool,
+) -> anyhow::Result<Option<String>> {
 	let cache_arc2 = cache_arc.clone();
 	if let Ok(mut cache) = cache_arc2.lock() {
 		cache.insert(cmd.sender.name.to_owned(), cmd.sender.id);
@@ -43,10 +44,12 @@ pub async fn handle_command(
 	let now = Instant::now();
 
 	let cmd_out = match cmd.cmd.as_str() {
+		// standard commands
 		"ping"           => ping(),
 		"decide"         => decide(&cmd),
 		"echo"           => echo(&cmd.args),
 		"say"            => echo(&cmd.args),
+		"translate"      => translate(&cmd).await,
 		"markov"         => markov(&pool, &cmd).await,
 		"newcmd"         => new_cmd(&pool, &cmd).await,
 		"suggest"        => suggest(&pool, &cmd).await,
@@ -57,32 +60,37 @@ pub async fn handle_command(
 		"accage"         => get_accage(&auth, &cmd).await,
 		"rmalias"        => remove_alias(&pool, &cmd).await,
 		"followage"      => get_followage(&cmd, &auth).await,
-		"delcmd"         => remove_channel_command(&pool, &cmd).await,
 		"urban"          => query_urban_dictionary(&cmd).await,
 		"lurk"           => set_lurk_status(&pool, &cmd).await,
 		"explain"        => explain(&pool, &cmd.args[0]).await,
 		"weather"        => get_weather_report(&cmd.args).await,
+		"delcmd"         => remove_channel_command(&pool, &cmd).await,
 		"offlinetime"    => get_offline_time(&pool, &auth, &cmd).await,
 		"clearreminders" => clear_reminders(&pool, cmd.sender.id).await,
 		"rmrm"           => clear_reminders(&pool, cmd.sender.id).await,
 		"first"          => first_message(&pool, &auth, cache_arc, &cmd).await,
 		"remindme"       => add_reminder(&pool, &auth, cache_arc, &cmd, true).await,
+		"wordratio"      => get_word_ratio(&pool, &auth, &cmd, config.prefix).await,
 		"remind"         => add_reminder(&pool, &auth, cache_arc, &cmd, false).await,
 		"rose"           => tag_rand_chatter_with_rose(&cmd.channel, &config.disregarded_users).await,
 		"bench"          => bench_command(&pool, client.clone(), config, &auth, cache_arc, cmd.clone()).await,
-		"wordratio"      => get_word_ratio(&pool, &auth, &cmd, config.prefix).await,
-		_ if (cmd.cmd.as_str() == &config.prefix.to_string()) => execute_alias(&pool, client.clone(), config, &auth, cache_arc, &cmd).await,
-		_ => execute_channel_command(&pool, &cmd).await,
-		// "translate"      => translate(&cmd).await,
+		// special commands
+		"pipe"           => pipe(&pool, client.clone(), config, &auth, cache_arc, &cmd).await,
+		""               => execute_alias(&pool, client.clone(), config, &auth, cache_arc, &cmd).await,
+		_                => try_execute_channel_command(&pool, &cmd).await,
 	};
 
 	let cmd_out = match cmd_out {
-		Ok(content) => content,
+		Ok(content_or_not) => content_or_not,
 		Err(e)      => {
 			println!("{e}");
 			Some("error while processing, sorry PoroSad".into())
 		},
 	};
+
+	if is_pipe {
+		return cmd_out;
+	}
 
 	match db::log_command(
 		&pool,
@@ -98,7 +106,7 @@ pub async fn handle_command(
 		client.say(cmd.channel, output.into()).await.unwrap();
 	}
 
-	Ok(())
+	Ok(None)
 }
 
 // get age of specified account (or called)
@@ -182,7 +190,7 @@ async fn execute_alias(
 		timestamp: cmd.timestamp.clone(),
 	};
 
-	handle_command(pool, client, config, auth, cache_arc, new_cmd).await?;
+	handle_command(pool, client, config, auth, cache_arc, new_cmd, false).await?;
 
 	Ok(None)
 }
@@ -556,8 +564,8 @@ async fn bench_command(
 	};
 
 	let now = Instant::now();
-	handle_command(pool, client, config, auth, cache_arc, new_cmd).await?;
-	Ok(Some(format!("{} ms", now.elapsed().as_millis())))
+	handle_command(pool, client, config, auth, cache_arc, new_cmd, true).await?;
+	Ok(Some(format!("📡 {} ms", now.elapsed().as_millis())))
 }
 
 // get the time a user has spent in an offline chat
@@ -729,7 +737,7 @@ async fn new_cmd(
 	Ok(Some("🔧 command created successfully".into()))
 }
 
-pub async fn execute_channel_command(
+pub async fn try_execute_channel_command(
 	pool: &SqlitePool,
 	cmd: &CommandSource,
 ) -> anyhow::Result<Option<String>> {
@@ -828,5 +836,60 @@ pub async fn decide(
 			return Some(format!("🎱 I choose... {rand_opt}"));
 		}
 	}
+}
+
+// chain commands via |
+async fn pipe(
+	pool: &SqlitePool,
+	client: TwitchClient,
+	config: &Config,
+	auth: &TwitchAuth,
+	cache_arc: Arc<Mutex<NameIdCache>>,
+	cmd: &CommandSource,
+) -> anyhow::Result<Option<String>> {
+	let commands: Vec<&str> = cmd.args.join(" ").split("|").collect::<Vec<&str>>();
+
+	if commands.len() <= 2 {
+		return Ok(Some("❌ no command to pipe"));
+	}
+
+	let mut temp_output = String::new();
+	for i in 0..commands.len() {
+	
+		if i == commands.len()-1 {
+			let final_pipe_output = match i {
+				"pastebin" => todo!(),
+				"toLower"  => temp_output.to_lowercase(),
+				"toUpper"  => temp_output.to_uppercase(),
+				"stdout"   => temp_output,
+				_          => return Ok(Some(format!("❌ final pipe command not matched"))),
+			}
+
+			temp_output = final_pipe_output;
+			break;
+		}
+
+		let trimmed_cmd = commands[i].trim().to_string().split(" ");
+
+		let new_cmd = CommandSource {
+			cmd: match trimmed_cmd.get(0) {
+				Some(a) => a[1..].to_owned(),
+				None => return Ok(Some(format!("❌ {} th pipe faulty", i+1))),
+			},
+			args: match trimmed_cmd.get(1) {
+				Some(_) => trimmed_cmd[1..].into_iter().map(|x| x.clone().to_string()).collect::<Vec<String>>(),
+				None => vec![],
+			},
+			channel:   cmd.channel.clone(),
+			sender:    cmd.sender.clone(),
+			timestamp: cmd.timestamp.clone(),
+		}
+
+		if let Some(output) = handle_command(pool, client, config, auth, cache_arc, new_cmd, true).await? {
+			temp_output = output;
+		}
+	}
+
+	Ok(Some(temp_output))
 }
 

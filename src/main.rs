@@ -207,7 +207,7 @@ async fn main() -> anyhow::Result<()> {
 					// if message is a command, handle it
 					if privmsg.message_text.chars().nth(0).unwrap() == config.prefix {
 						let cmd_src = CommandSource::from_privmsg(privmsg);
-						handle_command(&pool, client.clone(), &config, &auth, nameid_cache_arc.clone(), cmd_src).await.unwrap();
+						handle_command(&pool, client.clone(), &config, &auth, nameid_cache_arc.clone(), cmd_src, false).await.unwrap();
 					} else {
 						// index for markov if enabled by config
 						if config.index_markov {
