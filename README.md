@@ -24,7 +24,8 @@ A simple sophisticated Twitch bot in Rust.
 | first          | [nick: opt(str)] [channel: opt(str)]         | get the first logged message of a user (in any channel)            | None
 | lurk           | None                                         | go into lurk mode (gets removed upon next message)                 | None
 | markov         | [start: str] [count: int]                    | responds with a markov chain generated from saved chat messages    | None
-| newcmd         | [type: templ\|paste\|incr] [expression: str] | create a new channel command                                       | Broadcaster / Moderator / VIP         
+| newcmd         | [type: templ\|paste\|incr] [expression: str] | create a new channel command                                       | Broadcaster / Moderator / VIP
+| delcmd         | [name: str]                                  | delete a channel command                                           | Broadcaster / Moderator / VIP
 | offlinetime    | [name: opt(str)]                             | returns the time a user has thus far spent in offline chat         | None
 | ping           | None                                         | responds with "pong"                                               | None
 | remind         | (xh,xm) [user: str] [text]                   | reminds user when he types if spec. amouunt of time has passed     | None
@@ -37,8 +38,12 @@ A simple sophisticated Twitch bot in Rust.
 | urban          | [term: text]                                 | queries urbandictionary for a phrase                               | None
 | weather        | [location: text]                             | get weather report from specified location                         | None
 | wiki           | [phrase: text]                               | tries to query Wikipedia for searched topic/title                  | None
-<!-- | translate      | (from,to) [text]                     | translate some text |  -->
+| decide         | [options: comma-separated text]              | indecisive? let pseudorandomness choose                            | None
+| suggest        | [suggestion: text]                           | suggest something to the bot runner                                | None
+| uptime         | [channel: opt(str)]                          | get the uptime of a streamer                                       | None
+| wordratio      | [user: opt(str)] [word: str]                 | get the ratio of messages of a user that contain certain word      | None
 
+<!-- | translate      | (from,to) [text]                     | translate some text |  -->
 # Run yourself
 
 1. `git clone https://github.com/dynamo58/twitch-bot`

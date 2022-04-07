@@ -452,9 +452,26 @@ pub async fn get_followage(
         _ => Ok(Some(parsed.data[0].followed_at)),
     }
 }
-
+// curl -X POST -d 'api_dev_key=sRnTW6LlKvnQKkvEx6n8po1nclWA-y-D' -d 'api_paste_code=test' -d 'api_option=paste' "https://pastebin.com/api/api_post.php"
 pub async fn upload_to_pastebin(
     text: &str,
-) -> anyhow::Result<Option<String>> {
-    todo!()
+) -> anyhow::Result<String> {
+    let client = Client::new();
+
+    let params = [
+        ("api_dev_key",           &std::env::var("PASTEBIN")?[..]),
+        ("api_paste_expire_date", "1D"                           ),
+        ("api_paste_code",        text                           ),
+        ("api_option",            "paste"                        ),
+    ];
+
+    let res = client
+        .post(&format!("https://pastebin.com/api/api_post.php"))
+        .form(&params)
+        .send()
+        .await?
+        .text()
+        .await?;
+    
+    Ok(res)
 }

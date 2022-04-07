@@ -35,7 +35,7 @@ pub async fn handle_command(
 	cache_arc: Arc<Mutex<NameIdCache>>,
 	cmd:        CommandSource,
 	is_pipe:    bool,
-) -> anyhow::Result<Option<String>> {
+) -> Option<String> {
 	let cache_arc2 = cache_arc.clone();
 	if let Ok(mut cache) = cache_arc2.lock() {
 		cache.insert(cmd.sender.name.to_owned(), cmd.sender.id);
@@ -106,7 +106,7 @@ pub async fn handle_command(
 		client.say(cmd.channel, output.into()).await.unwrap();
 	}
 
-	Ok(None)
+	None
 }
 
 // get age of specified account (or called)
@@ -190,7 +190,7 @@ async fn execute_alias(
 		timestamp: cmd.timestamp.clone(),
 	};
 
-	handle_command(pool, client, config, auth, cache_arc, new_cmd, false).await?;
+	handle_command(pool, client, config, auth, cache_arc, new_cmd, false).await;
 
 	Ok(None)
 }
@@ -564,7 +564,7 @@ async fn bench_command(
 	};
 
 	let now = Instant::now();
-	handle_command(pool, client, config, auth, cache_arc, new_cmd, true).await?;
+	handle_command(pool, client, config, auth, cache_arc, new_cmd, true).await;
 	Ok(Some(format!("📡 {} ms", now.elapsed().as_millis())))
 }
 
@@ -817,23 +817,24 @@ pub async fn get_word_ratio(
 
 // parses the args into a list of (comma-separated) decisions,
 // choses one of them at random and returns it
-pub async fn decide(
+fn decide(
 	cmd: &CommandSource,
-) -> Option<String> {
+) -> anyhow::Result<Option<String>> {
 	match cmd.args.len() {
-		0 => return Some("❌ no options provided"),
+		0 => return Ok(Some("❌ no options provided".into())),
 		_ => {
-			let options = cmd.args
+			let options: Vec<String> = cmd.args
 				.join(" ")
 				.split(",")
-				.collect::<Vec<String>>();
+				.map(|a| a.to_owned())
+				.collect();
 			
 			let rand_opt = options[
 					rand::thread_rng()
 						.gen_range(0..options.len())
 			].clone();
 
-			return Some(format!("🎱 I choose... {rand_opt}"));
+			return Ok(Some(format!("🎱 I choose... {rand_opt}")));
 		}
 	}
 }
@@ -847,29 +848,38 @@ async fn pipe(
 	cache_arc: Arc<Mutex<NameIdCache>>,
 	cmd: &CommandSource,
 ) -> anyhow::Result<Option<String>> {
-	let commands: Vec<&str> = cmd.args.join(" ").split("|").collect::<Vec<&str>>();
+	let commands: Vec<String> = cmd.args
+		.join(" ")
+		.split("|")
+		.map(|a| a.trim().to_owned())
+		.collect();
 
-	if commands.len() <= 2 {
-		return Ok(Some("❌ no command to pipe"));
+	if commands.len() < 2 {
+		return Ok(Some("❌ no command to pipe".into()));
 	}
 
 	let mut temp_output = String::new();
 	for i in 0..commands.len() {
 	
 		if i == commands.len()-1 {
-			let final_pipe_output = match i {
-				"pastebin" => todo!(),
-				"toLower"  => temp_output.to_lowercase(),
-				"toUpper"  => temp_output.to_uppercase(),
+			let final_pipe_output = match commands[i].to_lowercase().as_str() {
+				"pastebin" => api::upload_to_pastebin(&temp_output).await?,
+				"lower"  => temp_output.to_lowercase(),
+				"upper"  => temp_output.to_uppercase(),
 				"stdout"   => temp_output,
 				_          => return Ok(Some(format!("❌ final pipe command not matched"))),
-			}
+			};
 
 			temp_output = final_pipe_output;
 			break;
 		}
 
-		let trimmed_cmd = commands[i].trim().to_string().split(" ");
+		let trimmed_cmd: Vec<String> = commands[i]
+			.trim()
+			.to_string()
+			.split(" ")
+			.map(|a| a.to_owned())
+			.collect();
 
 		let new_cmd = CommandSource {
 			cmd: match trimmed_cmd.get(0) {
@@ -883,13 +893,12 @@ async fn pipe(
 			channel:   cmd.channel.clone(),
 			sender:    cmd.sender.clone(),
 			timestamp: cmd.timestamp.clone(),
-		}
+		};
 
-		if let Some(output) = handle_command(pool, client, config, auth, cache_arc, new_cmd, true).await? {
+		if let Some(output) = handle_command(pool, client.clone(), config, auth, cache_arc.clone(), new_cmd, true).await {
 			temp_output = output;
 		}
 	}
 
 	Ok(Some(temp_output))
 }
-
