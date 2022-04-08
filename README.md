@@ -42,6 +42,7 @@ A simple sophisticated Twitch bot in Rust.
 | suggest        | [suggestion: text]                           | suggest something to the bot runner                                | None
 | uptime         | [channel: opt(str)]                          | get the uptime of a streamer                                       | None
 | wordratio      | [user: opt(str)] [word: str]                 | get the ratio of messages of a user that contain certain word      | None
+| reddit         | [subreddit: str] opt()
 
 <!-- | translate      | (from,to) [text]                     | translate some text |  -->
 # Run yourself

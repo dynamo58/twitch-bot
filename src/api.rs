@@ -289,9 +289,32 @@ pub async fn get_all_channel_emotes<T: Display>(
     }
 }
 
+// ref: https://dev.twitch.tv/docs/api/reference#get-users-follows
+// get the date of the follow of a user of a channel.... what?
+pub async fn get_followage(
+    auth: &TwitchAuth,
+    channel_id: i32,
+    user_id: i32
+) -> anyhow::Result<Option<DateTime<Utc>>> {
+    let client = Client::new();
 
+    let res = client
+        .get(&format!("https://api.twitch.tv/helix/users/follows?to_id={channel_id}&from_id={user_id}"))
+        .header("Client-ID", auth.client_id.clone())
+        .header("Authorization", format!("Bearer {}", auth.oauth.clone()))
+        .send()
+        .await?
+        .text()
+        .await?;
 
-// https://dev.twitch.tv/docs/api/reference#get-users-follows
+    let parsed: models::TwitchFollowResponse = serde_json::from_str(&res)?;
+
+    match parsed.total {
+        0 => Ok(None),
+        _ => Ok(Some(parsed.data[0].followed_at)),
+    }
+}
+
 
 // —————————————————————————————————————————
 //               Other APIs
@@ -427,32 +450,7 @@ pub async fn query_urban_dictionary(
     }
 }
 
-// ref: https://dev.twitch.tv/docs/api/reference#get-users-follows
-// get the date of the follow of a user of a channel.... what?
-pub async fn get_followage(
-    auth: &TwitchAuth,
-    channel_id: i32,
-    user_id: i32
-) -> anyhow::Result<Option<DateTime<Utc>>> {
-    let client = Client::new();
-
-    let res = client
-        .get(&format!("https://api.twitch.tv/helix/users/follows?to_id={channel_id}&from_id={user_id}"))
-        .header("Client-ID", auth.client_id.clone())
-        .header("Authorization", format!("Bearer {}", auth.oauth.clone()))
-        .send()
-        .await?
-        .text()
-        .await?;
-
-    let parsed: models::TwitchFollowResponse = serde_json::from_str(&res)?;
-
-    match parsed.total {
-        0 => Ok(None),
-        _ => Ok(Some(parsed.data[0].followed_at)),
-    }
-}
-// curl -X POST -d 'api_dev_key=sRnTW6LlKvnQKkvEx6n8po1nclWA-y-D' -d 'api_paste_code=test' -d 'api_option=paste' "https://pastebin.com/api/api_post.php"
+// upload some text to pastebin
 pub async fn upload_to_pastebin(
     text: &str,
 ) -> anyhow::Result<String> {
@@ -474,4 +472,109 @@ pub async fn upload_to_pastebin(
         .await?;
     
     Ok(res)
+}
+
+
+#[derive(Debug)]
+pub enum RedditPostRelevancy {
+	Hour,
+	Day, 
+	Week,
+	Month,
+	Year,
+	All,
+}
+
+impl RedditPostRelevancy {
+	pub fn new_from_vec(v: &Vec<String>) -> Self {
+        let options = ["hour", "day", "week", "month", "year", "all"];
+        let mut relevancy = Self::Week;
+
+        for i in 0..options.len() {
+            if v.contains(&options[i].to_owned()) {
+                relevancy = match i {
+                    0 => Self::Hour,
+                    1 => Self::Day,
+                    2 => Self::Week,
+                    3 => Self::Month,
+                    4 => Self::Year,
+                    5 => Self::All,
+                    _ => Self::Week
+                }
+            }
+        }
+
+        relevancy
+	}
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Hour  => "hour",
+            Self::Day   => "day",
+            Self::Week  => "week",
+            Self::Month => "month",
+            Self::Year  => "year",
+            Self::All   => "all"
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum RedditPostType {
+	MostUpvotes,
+	Random,
+}
+
+impl RedditPostType {
+	pub fn new_from_vec(v: &Vec<String>) -> Self {
+        let options = ["upvotes", "random"];
+        let mut post_type = Self::Random;
+
+        for i in 0..options.len() {
+            if v.contains(&options[i].to_owned()) {
+                post_type = match i {
+                    0 => Self::MostUpvotes,
+                    1 => Self::Random,
+                    _ => Self::Random,
+                }
+            }
+        }
+
+        post_type
+	}
+}
+
+pub enum AdditionalRedditParameter {
+    HasMedia,
+}
+
+impl AdditionalRedditParameter {
+    pub fn new_from_vec(v: &Vec<String>) -> Vec<Self> {
+        let mut out = Vec::new();
+        
+        if v.contains(&"media".to_owned()) || v.contains(&"--has-media".to_owned()) {
+            out.push(HasMedia);
+        }
+
+        out
+    }
+}
+
+pub async fn get_reddit_posts_gists(
+    subreddit:  &str,
+    relevancy:  RedditPostRelevancy,
+) -> anyhow::Result<models::SubredditResponse> {
+    let relevancy_str = relevancy.as_str();
+
+    let client = Client::new();
+
+    let res = client
+        .get(&format!("https://www.reddit.com/r/{subreddit}/top/?t=${relevancy}"))
+        .send()
+        .await?
+        .text()
+        .await?;
+
+    let parsed: models::SubredditResponse = serde_json::from_str(&res)?;
+    Ok(parsed)
 }

@@ -904,26 +904,13 @@ async fn pipe(
 	Ok(Some(temp_output))
 }
 
-pub enum RedditRelevancy  {
-	Hour,
-	Day, 
-	Week,
-	Month,
-	Year,
-	All,
-}
-
-pub enum RedditPostType {
-	MostUpvotes,
-	Random,
-}
-
+// fetch a post from reddit
 async fn get_reddit_post(
 	cmd: &CommandSource,
 ) -> anyhow::Result<Option<String> {
 	let subr = match cmd.args.len() {
 		0 => return Ok(Some("❌ no subreddit provided")),
-		1 => {
+		_ => {
 			let mut s = cmd.args[0].clone();
 
 			if &s[0..2] == "r/" {
@@ -934,5 +921,41 @@ async fn get_reddit_post(
 		}
 	}
 
-	todo!()
+	let relevancy  = api::RedditPostRelevancy::new_from_vec(&cmd.args);
+	let post_type  = api::RedditPostType::new_from_vec(&cmd.args);
+	let add_params = api::AdditionalRedditParameter::new_from_vec(&cmd.args)
+
+	let mut posts = api::get_reddit_post(&subr, relevancy)
+		.await?
+		.data
+		.children;
+
+	match posts.len() {
+        0 => return Ok(Some(format!("❌ r/{subr} has no posts"))),
+		_ => {
+
+			if add_params.contains(&api::AdditionalRedditParameter::HasMedia) {
+				parsed = parsed.filter(|post| => (post.data.children))
+			}
+
+			match post_type {
+				api::RedditPostType::MostUpvotes => {
+					let title    = posts[0].data.title;
+					let selftext = posts[0].data.selftext;
+					let url      = parsed.data.children[0].data.url;
+
+					return Ok(Some(format!("{title}: selftext [{url}]")));
+				},
+				api::RedditPostType::Random => {
+					let rand_post = parsed.data.children[rand::thread_rng().gen_range(0..parsed.data.children.len())].clone();
+
+					let title    = rand_post.data.title;
+					let selftext = rand_post.data.selftext;
+					let url      = rand_post.data.url;
+
+					return Ok(Some(format!("{title}: selftext [{url}]")));
+				},
+			},
+		},
+    }
 }
