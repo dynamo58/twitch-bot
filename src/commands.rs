@@ -53,6 +53,7 @@ pub async fn handle_command(
 		"markov"         => markov(&pool, &cmd).await,
 		"newcmd"         => new_cmd(&pool, &cmd).await,
 		"suggest"        => suggest(&pool, &cmd).await,
+		"reddit"         => get_reddit_post(&cmd).await,
 		"wiki"           => query_wikipedia(&cmd).await,
 		"define"         => query_dictionary(&cmd).await,
 		"setalias"       => set_alias(&pool, &cmd).await,
@@ -901,4 +902,37 @@ async fn pipe(
 	}
 
 	Ok(Some(temp_output))
+}
+
+pub enum RedditRelevancy  {
+	Hour,
+	Day, 
+	Week,
+	Month,
+	Year,
+	All,
+}
+
+pub enum RedditPostType {
+	MostUpvotes,
+	Random,
+}
+
+async fn get_reddit_post(
+	cmd: &CommandSource,
+) -> anyhow::Result<Option<String> {
+	let subr = match cmd.args.len() {
+		0 => return Ok(Some("❌ no subreddit provided")),
+		1 => {
+			let mut s = cmd.args[0].clone();
+
+			if &s[0..2] == "r/" {
+				s = s[2..]
+			}
+
+			s
+		}
+	}
+
+	todo!()
 }
