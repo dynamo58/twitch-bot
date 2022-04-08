@@ -58,5 +58,9 @@ INSERT INTO
 		(
 			"E2",
 			"You do not have any messages logged so far. Commands do not get saved."
+		),
+		(
+			"E3",
+			"The very last command of a pipe has to be one of the following: pastebin / lower / upper / stdout"
 		)
 	ON CONFLICT DO NOTHING;

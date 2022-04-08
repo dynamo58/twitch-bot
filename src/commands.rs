@@ -49,7 +49,7 @@ pub async fn handle_command(
 		"decide"         => decide(&cmd),
 		"echo"           => echo(&cmd.args),
 		"say"            => echo(&cmd.args),
-		"translate"      => translate(&cmd).await,
+		// "translate"      => translate(&cmd).await,
 		"markov"         => markov(&pool, &cmd).await,
 		"newcmd"         => new_cmd(&pool, &cmd).await,
 		"suggest"        => suggest(&pool, &cmd).await,
@@ -505,26 +505,26 @@ fn parse_langs(s: &String) -> anyhow::Result<(&str, &str)> {
 } 
 
 // translate a phrase
-async fn translate(
-	cmd: &CommandSource,
-) -> anyhow::Result<Option<String>> {
-	let langs = match cmd.args.get(0) {
-		Some(l) => l,
-		None    => return Ok(Some("❌ insufficient args".into())),
-	};
+// async fn translate(
+// 	cmd: &CommandSource,
+// ) -> anyhow::Result<Option<String>> {
+// 	let langs = match cmd.args.get(0) {
+// 		Some(l) => l,
+// 		None    => return Ok(Some("❌ insufficient args".into())),
+// 	};
 
-	let text = match &cmd.args.get(1) {
-		Some(_) => cmd.args[1..].join(" "),
-		None    => return Ok(Some("❌ insufficient args".into())),
-	};
+// 	let text = match &cmd.args.get(1) {
+// 		Some(_) => cmd.args[1..].join(" "),
+// 		None    => return Ok(Some("❌ insufficient args".into())),
+// 	};
 
-	let (src_lang, target_lang) = match parse_langs(langs) {
-		Ok(ls) => ls,
-		Err(_) => return Ok(Some("❌ bad formatting".into())),
-	};
+// 	let (src_lang, target_lang) = match parse_langs(langs) {
+// 		Ok(ls) => ls,
+// 		Err(_) => return Ok(Some("❌ bad formatting".into())),
+// 	};
 
-	Ok(Some(api::translate(src_lang, target_lang, &text).await?))
-}
+// 	Ok(Some(api::translate(src_lang, target_lang, &text).await?))
+// }
 
 // go into AFK state
 async fn set_lurk_status(
@@ -868,7 +868,7 @@ async fn pipe(
 				"lower"  => temp_output.to_lowercase(),
 				"upper"  => temp_output.to_uppercase(),
 				"stdout"   => temp_output,
-				_          => return Ok(Some(format!("❌ final pipe command not matched"))),
+				_          => return Ok(Some(format!("❌ final pipe command not matched | E3"))),
 			};
 
 			temp_output = final_pipe_output;
@@ -907,25 +907,25 @@ async fn pipe(
 // fetch a post from reddit
 async fn get_reddit_post(
 	cmd: &CommandSource,
-) -> anyhow::Result<Option<String> {
+) -> anyhow::Result<Option<String>> {
 	let subr = match cmd.args.len() {
-		0 => return Ok(Some("❌ no subreddit provided")),
+		0 => return Ok(Some("❌ no subreddit provided".into())),
 		_ => {
 			let mut s = cmd.args[0].clone();
 
 			if &s[0..2] == "r/" {
-				s = s[2..]
+				s = s[2..].to_string()
 			}
 
 			s
 		}
-	}
+	};
 
 	let relevancy  = api::RedditPostRelevancy::new_from_vec(&cmd.args);
 	let post_type  = api::RedditPostType::new_from_vec(&cmd.args);
-	let add_params = api::AdditionalRedditParameter::new_from_vec(&cmd.args)
+	let add_params = api::AdditionalRedditParameter::new_from_vec(&cmd.args);
 
-	let mut posts = api::get_reddit_post(&subr, relevancy)
+	let mut posts = api::get_reddit_posts(&subr, relevancy)
 		.await?
 		.data
 		.children;
@@ -935,27 +935,35 @@ async fn get_reddit_post(
 		_ => {
 
 			if add_params.contains(&api::AdditionalRedditParameter::HasMedia) {
-				parsed = parsed.filter(|post| => (post.data.children))
+				posts = posts
+					.into_iter()
+					.filter(|post|
+						post.data.url.contains(".png") ||
+						post.data.url.contains(".jpg") ||
+						post.data.url.contains(".gif") ||
+						post.data.url.contains(".webp")
+					)
+					.collect();
 			}
 
 			match post_type {
 				api::RedditPostType::MostUpvotes => {
-					let title    = posts[0].data.title;
-					let selftext = posts[0].data.selftext;
-					let url      = parsed.data.children[0].data.url;
+					let title    = &posts[0].data.title;
+					let selftext = &posts[0].data.selftext;
+					let url      = &posts[0].data.url;
 
-					return Ok(Some(format!("{title}: selftext [{url}]")));
+					return Ok(Some(format!("{title}: {selftext} [ {url} ]")));
 				},
 				api::RedditPostType::Random => {
-					let rand_post = parsed.data.children[rand::thread_rng().gen_range(0..parsed.data.children.len())].clone();
+					let rand_post = posts[rand::thread_rng().gen_range(0..posts.len())].clone();
 
 					let title    = rand_post.data.title;
 					let selftext = rand_post.data.selftext;
 					let url      = rand_post.data.url;
 
-					return Ok(Some(format!("{title}: selftext [{url}]")));
+					return Ok(Some(format!("{title}: {selftext} [ {url} ]")));
 				},
-			},
+			}
 		},
     }
 }

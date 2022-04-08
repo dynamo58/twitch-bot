@@ -2,7 +2,6 @@
 
 use crate::TwitchAuth;
 use crate::api_models as models;
-use crate::api_models::WikiResponse;
 
 use std::fmt::Display;
 
@@ -348,35 +347,35 @@ pub async fn get_weather_report(
     return Ok(Some(format!("Weather in {area}, {country}: {temp}, {humid}, {pressure}, {precip}, {wind}")));
 }
 
-pub async fn translate(
-    src_lang: &str,
-    target_lang: &str,
-    text: &str,
-) -> anyhow::Result<String> {
-    todo!()
-    // let client = Client::new();
+// pub async fn translate(
+//     src_lang: &str,
+//     target_lang: &str,
+//     text: &str,
+// ) -> anyhow::Result<String> {
+//     todo!()
+//     // let client = Client::new();
 
-    // let res = client
-    //     .get("https://api-free.deepl.com/v2/translate")
-    //     .form(&[
-    //         ("text"       , text),
-    //         ("target_lang", target_lang)
-    //     ])
-    //     .send()
-    //     .await?
-    //     .text()
-    //     .await?;
+//     // let res = client
+//     //     .get("https://api-free.deepl.com/v2/translate")
+//     //     .form(&[
+//     //         ("text"       , text),
+//     //         ("target_lang", target_lang)
+//     //     ])
+//     //     .send()
+//     //     .await?
+//     //     .text()
+//     //     .await?;
 
-    // dbg!(&res);
-    // let info: models::DeelResponse = serde_json::from_str(&res)?;
+//     // dbg!(&res);
+//     // let info: models::DeelResponse = serde_json::from_str(&res)?;
 
-    // Ok(info.translations[0].text.clone())
-}
+//     // Ok(info.translations[0].text.clone())
+// }
 
 // query wikipedia for an article gist
 pub async fn query_wikipedia(
     phrase: &str,
-) -> anyhow::Result<Option<WikiResponse>> {
+) -> anyhow::Result<Option<models::WikiResponse>> {
     let client = Client::new();
 
     let res = client
@@ -407,14 +406,14 @@ pub async fn query_dictionary(
 
     let parsed: models::DictionaryResponse = match serde_json::from_str(&res) {
         Ok(tr) => tr,
-        Err(e) => return Ok(None),
+        Err(_) => return Ok(None),
     };
 
     let pronunciation = match &parsed[0].phonetic {
         Some(p) => p,
-        None    => ""
+        None    => "",
     };
-    let definition    = &parsed[0].meanings[0].definitions[0].definition;
+    let definition = &parsed[0].meanings[0].definitions[0].definition;
 
     Ok(Some(format!("{pronunciation} {definition}")))
 }
@@ -473,7 +472,6 @@ pub async fn upload_to_pastebin(
     
     Ok(res)
 }
-
 
 #[derive(Debug)]
 pub enum RedditPostRelevancy {
@@ -544,6 +542,7 @@ impl RedditPostType {
 	}
 }
 
+#[derive(PartialEq, Eq)]
 pub enum AdditionalRedditParameter {
     HasMedia,
 }
@@ -553,14 +552,14 @@ impl AdditionalRedditParameter {
         let mut out = Vec::new();
         
         if v.contains(&"media".to_owned()) || v.contains(&"--has-media".to_owned()) {
-            out.push(HasMedia);
+            out.push(AdditionalRedditParameter::HasMedia);
         }
 
         out
     }
 }
 
-pub async fn get_reddit_posts_gists(
+pub async fn get_reddit_posts(
     subreddit:  &str,
     relevancy:  RedditPostRelevancy,
 ) -> anyhow::Result<models::SubredditResponse> {
@@ -569,7 +568,7 @@ pub async fn get_reddit_posts_gists(
     let client = Client::new();
 
     let res = client
-        .get(&format!("https://www.reddit.com/r/{subreddit}/top/?t=${relevancy}"))
+        .get(&format!("https://www.reddit.com/r/{subreddit}/top.json?t=${relevancy_str}"))
         .send()
         .await?
         .text()
