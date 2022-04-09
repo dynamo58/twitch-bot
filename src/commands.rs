@@ -49,6 +49,7 @@ pub async fn handle_command(
 		"decide"         => decide(&cmd),
 		"echo"           => echo(&cmd.args),
 		"say"            => echo(&cmd.args),
+		"time"           => get_time(&cmd).await,
 		// "translate"      => translate(&cmd).await,
 		"markov"         => markov(&pool, &cmd).await,
 		"newcmd"         => new_cmd(&pool, &cmd).await,
@@ -417,7 +418,7 @@ async fn first_message(
 // get saved into the database
 async fn suggest(
 	pool: &SqlitePool,
-	cmd: &CommandSource,
+	cmd:  &CommandSource,
 ) -> anyhow::Result<Option<String>> {
 	let text = match &cmd.args.get(0) {
 		Some(_) => cmd.args.join(" "),
@@ -437,7 +438,7 @@ async fn suggest(
 
 // give a rose to a random chatter in the channel
 async fn tag_rand_chatter_with_rose(
-	channel_name: &str,
+	channel_name:      &str,
 	disregarded_users: &Vec<String>,
 ) -> anyhow::Result<Option<String>> {
 	let chatters = match api::get_chatters(channel_name).await? {
@@ -477,7 +478,7 @@ async fn get_weather_report(
 // get uptime of a stream
 async fn get_uptime(
 	auth: &TwitchAuth,
-	cmd: &CommandSource,
+	cmd:  &CommandSource,
 ) -> anyhow::Result<Option<String>> {
 	let channel = match &cmd.args.get(0) {
 		Some(a) => a,
@@ -529,7 +530,7 @@ fn parse_langs(s: &String) -> anyhow::Result<(&str, &str)> {
 // go into AFK state
 async fn set_lurk_status(
 	pool: &SqlitePool,
-	cmd: &CommandSource,
+	cmd:  &CommandSource,
 ) -> anyhow::Result<Option<String>> {
 	let sender_name = &cmd.sender.name;
 	let sender_id = cmd.sender.id;
@@ -547,7 +548,7 @@ async fn bench_command(
 	client:     TwitchClient,
 	config:     &Config,
 	auth:       &TwitchAuth,
-	cache_arc: Arc<Mutex<NameIdCache>>,
+	cache_arc:  Arc<Mutex<NameIdCache>>,
 	cmd:        CommandSource,
 ) -> anyhow::Result<Option<String>> {
 	let new_cmd = CommandSource {
@@ -659,7 +660,7 @@ async fn query_urban_dictionary(
 }
 
 async fn get_followage(
-	cmd: &CommandSource,
+	cmd:         &CommandSource,
 	twitch_auth: &TwitchAuth,
 ) -> anyhow::Result<Option<String>> {
 	let (channel_name, channel_id) = match cmd.args.len() {
@@ -700,7 +701,7 @@ async fn get_followage(
 
 async fn new_cmd(
 	pool: &SqlitePool,
-	cmd: &CommandSource,
+	cmd:  &CommandSource,
 ) -> anyhow::Result<Option<String>> {
 	if !(
 		cmd.sender.statuses.contains(&TwitchBadge::Broadcaster) ||
@@ -740,7 +741,7 @@ async fn new_cmd(
 
 pub async fn try_execute_channel_command(
 	pool: &SqlitePool,
-	cmd: &CommandSource,
+	cmd:  &CommandSource,
 ) -> anyhow::Result<Option<String>> {
 	let cmd_name = cmd.cmd.as_str();
 
@@ -773,7 +774,7 @@ pub async fn try_execute_channel_command(
 
 pub async fn remove_channel_command(
 	pool: &SqlitePool,
-	cmd: &CommandSource,
+	cmd:  &CommandSource,
 ) -> anyhow::Result<Option<String>> {
 	let cmd_name = match cmd.args.get(0) {
 		Some(a) => a,
@@ -842,12 +843,12 @@ fn decide(
 
 // chain commands via |
 async fn pipe(
-	pool: &SqlitePool,
-	client: TwitchClient,
-	config: &Config,
-	auth: &TwitchAuth,
+	pool:      &SqlitePool,
+	client:    TwitchClient,
+	config:    &Config,
+	auth:      &TwitchAuth,
 	cache_arc: Arc<Mutex<NameIdCache>>,
-	cmd: &CommandSource,
+	cmd:       &CommandSource,
 ) -> anyhow::Result<Option<String>> {
 	let commands: Vec<String> = cmd.args
 		.join(" ")
@@ -862,17 +863,14 @@ async fn pipe(
 	let mut temp_output = String::new();
 	for i in 0..commands.len() {
 	
-		if i == commands.len()-1 {
-			let final_pipe_output = match commands[i].to_lowercase().as_str() {
-				"pastebin" => api::upload_to_pastebin(&temp_output).await?,
-				"lower"  => temp_output.to_lowercase(),
-				"upper"  => temp_output.to_uppercase(),
-				"stdout"   => temp_output,
-				_          => return Ok(Some(format!("❌ final pipe command not matched | E3"))),
-			};
-
-			temp_output = final_pipe_output;
-			break;
+		match commands[i].to_lowercase().as_str() {
+			"pastebin"  => { temp_output = api::upload_to_pastebin(&temp_output).await?; continue },
+			"lower"     => { temp_output = temp_output.to_lowercase()                  ; continue },
+			"upper"     => { temp_output = temp_output.to_uppercase()                  ; continue },
+			"stdout"    => { temp_output = temp_output                                 ; continue },
+			"/dev/null" => { temp_output = "".to_string()                              ; continue },
+			"devnull"   => { temp_output = "".to_owned()                               ; continue },
+			_           => (),
 		}
 
 		let trimmed_cmd: Vec<String> = commands[i]
@@ -885,11 +883,11 @@ async fn pipe(
 		let new_cmd = CommandSource {
 			cmd: match trimmed_cmd.get(0) {
 				Some(a) => a[1..].to_owned(),
-				None => return Ok(Some(format!("❌ {} th pipe faulty", i+1))),
+				None    => return Ok(Some(format!("❌ {}th pipe faulty", i+1))),
 			},
 			args: match trimmed_cmd.get(1) {
 				Some(_) => trimmed_cmd[1..].into_iter().map(|x| x.clone().to_string()).collect::<Vec<String>>(),
-				None => vec![],
+				None    => vec![],
 			},
 			channel:   cmd.channel.clone(),
 			sender:    cmd.sender.clone(),
@@ -898,6 +896,8 @@ async fn pipe(
 
 		if let Some(output) = handle_command(pool, client.clone(), config, auth, cache_arc.clone(), new_cmd, true).await {
 			temp_output = output;
+		} else {
+			temp_output = "".to_owned();
 		}
 	}
 
@@ -925,45 +925,72 @@ async fn get_reddit_post(
 	let post_type  = api::RedditPostType::new_from_vec(&cmd.args);
 	let add_params = api::AdditionalRedditParameter::new_from_vec(&cmd.args);
 
-	let mut posts = api::get_reddit_posts(&subr, relevancy)
+	let mut posts = api::get_reddit_posts(&subr, &relevancy)
 		.await?
 		.data
 		.children;
 
 	match posts.len() {
-        0 => return Ok(Some(format!("❌ r/{subr} has no posts"))),
+        0 => return Ok(Some(format!("❌ r/{subr} has no posts in in selection \'{}\'", relevancy.as_str()))),
 		_ => {
 
 			if add_params.contains(&api::AdditionalRedditParameter::HasMedia) {
 				posts = posts
 					.into_iter()
 					.filter(|post|
-						post.data.url.contains(".png") ||
-						post.data.url.contains(".jpg") ||
-						post.data.url.contains(".gif") ||
-						post.data.url.contains(".webp")
+						post.data.url.contains(".png")  ||
+						post.data.url.contains(".jpg")  ||
+						post.data.url.contains(".gif")  ||
+						post.data.url.contains(".webp") ||
+						post.data.url.contains(".webm") ||
+						post.data.url.contains(".mp4")
 					)
 					.collect();
+				
+				if posts.len() == 0 {
+					return Ok(Some(format!("❌ no post containing media in selection \'{}\'", relevancy.as_str())));
+				}
 			}
 
 			match post_type {
 				api::RedditPostType::MostUpvotes => {
 					let title    = &posts[0].data.title;
-					let selftext = &posts[0].data.selftext;
+					let selftext = match &posts[0].data.selftext[..] {
+						"" => format!(": {}", &posts[0].data.selftext),
+						_  => "".into(),
+					};
 					let url      = &posts[0].data.url;
 
-					return Ok(Some(format!("{title}: {selftext} [ {url} ]")));
+					return Ok(Some(format!("{title}{selftext} [ {url} ]")));
 				},
 				api::RedditPostType::Random => {
 					let rand_post = posts[rand::thread_rng().gen_range(0..posts.len())].clone();
 
 					let title    = rand_post.data.title;
-					let selftext = rand_post.data.selftext;
+					let selftext = match &rand_post.data.selftext[..] {
+						"" => format!(": {}", rand_post.data.selftext),
+						_  => "".into(),
+					};
 					let url      = rand_post.data.url;
 
-					return Ok(Some(format!("{title}: {selftext} [ {url} ]")));
+					return Ok(Some(format!("{title}{selftext} [ {url} ]")));
 				},
 			}
 		},
     }
+}
+
+// get local time of a specified location
+pub async fn get_time(
+	cmd: &CommandSource,
+) -> anyhow::Result<Option<String>> {
+	let location = match cmd.args.len() {
+		0       => return Ok(Some("❌ no location provided".into())),
+		_       => cmd.args.join(" "),
+	};
+
+	match api::get_time(&location).await? {
+		Some(a) => Ok(Some(a)),
+		None    => Ok(Some("❌ The location was not found".into()))
+	}
 }

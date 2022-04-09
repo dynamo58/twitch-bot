@@ -456,10 +456,10 @@ pub async fn upload_to_pastebin(
     let client = Client::new();
 
     let params = [
-        ("api_dev_key",           &std::env::var("PASTEBIN")?[..]),
-        ("api_paste_expire_date", "1D"                           ),
-        ("api_paste_code",        text                           ),
-        ("api_option",            "paste"                        ),
+        ("api_dev_key"          , &std::env::var("PASTEBIN_API_KEY")?[..]),
+        ("api_paste_expire_date", "1D"                                   ),
+        ("api_paste_code"       , text                                   ),
+        ("api_option"           , "paste"                                ),
     ];
 
     let res = client
@@ -485,7 +485,7 @@ pub enum RedditPostRelevancy {
 
 impl RedditPostRelevancy {
 	pub fn new_from_vec(v: &Vec<String>) -> Self {
-        let options = ["hour", "day", "week", "month", "year", "all"];
+        let options = ["hour", "day", "week", "month", "year", "all", "alltime"];
         let mut relevancy = Self::Week;
 
         for i in 0..options.len() {
@@ -497,6 +497,7 @@ impl RedditPostRelevancy {
                     3 => Self::Month,
                     4 => Self::Year,
                     5 => Self::All,
+                    6 => Self::All,
                     _ => Self::Week
                 }
             }
@@ -561,7 +562,7 @@ impl AdditionalRedditParameter {
 
 pub async fn get_reddit_posts(
     subreddit:  &str,
-    relevancy:  RedditPostRelevancy,
+    relevancy:  &RedditPostRelevancy,
 ) -> anyhow::Result<models::SubredditResponse> {
     let relevancy_str = relevancy.as_str();
 
@@ -576,4 +577,34 @@ pub async fn get_reddit_posts(
 
     let parsed: models::SubredditResponse = serde_json::from_str(&res)?;
     Ok(parsed)
+}
+
+// get the time in a location
+pub async fn get_time(
+    location: &str
+) -> anyhow::Result<Option<String>> {
+    let api_key = &std::env::var("IPGEOLOCATION_API_KEY")?[..];
+    let client = Client::new();
+
+    let res = client
+        .get(&format!("https://api.ipgeolocation.io/timezone?apiKey={api_key}&location={location}"))
+        .send()
+        .await?
+        .text()
+        .await?;
+    
+    let parsed: models::IPGeolocationResponse = match serde_json::from_str(&res) {
+        Ok(p) => p,
+        Err(_) => return Ok(None),
+    };
+
+    let gmt_offset = {
+        if parsed.is_dst {
+            format!("GMT+{}", parsed.timezone_offset_with_dst)
+        } else {
+            format!("GMT+{}", parsed.timezone_offset)
+        }
+    };
+
+    Ok(Some(format!("{}, (timezone {} {gmt_offset})", parsed.date_time, parsed.timezone)))
 }

@@ -371,3 +371,17 @@ pub struct Data2___ {
     pub title: String,
     pub url: String,
 }
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IPGeolocationResponse {
+    pub timezone: String,
+    #[serde(rename = "timezone_offset")]
+    pub timezone_offset: i64,
+    #[serde(rename = "timezone_offset_with_dst")]
+    pub timezone_offset_with_dst: i64,
+    #[serde(rename = "date_time")]
+    pub date_time: String,
+    #[serde(rename = "is_dst")]
+    pub is_dst: bool,
+}
