@@ -16,6 +16,7 @@ A simple sophisticated Twitch bot in Rust.
 | \[prefix\]     | [alias name: str]                                                          | execute an alias                                                   | None
 | accage         | [name: opt(str)]                                                           | get the account age of spec. user or one's self                    | None
 | bench          | Command                                                                    | measure how long a command takes to execute                        | None
+| bible          | None                                                                       | get a random verse from the bible                                  | None
 | followage      | [user: opt(str)] [channel: opt(str)]                                       | get the amount of time a user has been following a channel         | None
 | clearreminders | None                                                                       | clears all reminders the user has set (that are still pending)     | None
 | decide         | [options: comma-separated text]                                            | indecisive? let pseudorandomness choose                            | None
@@ -29,6 +30,7 @@ A simple sophisticated Twitch bot in Rust.
 | delcmd         | [name: str]                                                                | delete a channel command                                           | Broadcaster/Moderator/VIP
 | offlinetime    | [name: opt(str)]                                                           | returns the time a user has thus far spent in offline chat         | None
 | ping           | None                                                                       | responds with "pong"                                               | None
+| quran          | None                                                                       | get a random verse from the quran                                  | None
 | reddit         | [r/: str] opt(random/upvotes) opt(media) opt(hour/day/week/month/year/all) | get a post from reddit                                             | None
 | remind         | (xh,xm) [user: str] [text]                                                 | reminds user when he types if spec. amouunt of time has passed     | None
 | remindme       | (xh,xm) [text]                                                             | shortcut for reminding one's self                                  | None
@@ -37,6 +39,7 @@ A simple sophisticated Twitch bot in Rust.
 | rmrm           | None                                                                       | alias for the `clearreminders` command                             | None
 | say            | [text]                                                                     | alias for `echo`                                                   | None
 | setalias       | [name: str] [cmd expression]                                               | set an alias for caller (like a substitue for specificied command) | None
+| tanakh         | None                                                                       | get a random verse from the tanakh                                 | None
 | urban          | [term: text]                                                               | queries urbandictionary for a phrase                               | None
 | weather        | [location: text]                                                           | get weather report from specified location                         | None
 | wiki           | [phrase: text]                                                             | tries to query Wikipedia for searched topic/title                  | None
@@ -44,8 +47,8 @@ A simple sophisticated Twitch bot in Rust.
 | uptime         | [channel: opt(str)]                                                        | get the uptime of a streamer                                       | None
 | wordratio      | [user: opt(str)] [word: str]                                               | get the ratio of messages of a user that contain certain word      | None
 | time           | [location: text]                                                           | get the local time in the specified location                       | None
-
 <!-- | translate      | (from,to) [text]                     | translate some text |  -->
+
 # Run yourself
 
 1. `git clone https://github.com/dynamo58/twitch-bot`

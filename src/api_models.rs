@@ -210,16 +210,18 @@ pub struct WttrInResponse {
 #[serde(rename_all = "camelCase")]
 pub struct CurrentCondition {
     pub humidity: String,
-    #[serde(rename = "precipMm")]
+    #[serde(rename = "precipMM")]
     pub precip_mm: String,
     pub pressure: String,
     #[serde(rename = "temp_C")]
     pub temp_c: String,
+    #[serde(rename = "winddir16Point")]
     pub winddir16point: String,
+    #[serde(rename = "winddirDegree")]
     pub winddir_degree: String,
+    #[serde(rename = "windspeedKmph")]
     pub windspeed_kmph: String,
 }
-
 
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -384,4 +386,24 @@ pub struct IPGeolocationResponse {
     pub date_time: String,
     #[serde(rename = "is_dst")]
     pub is_dst: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DevotionaliumResponse {
+    #[serde(rename = "0")]
+    pub tanakh: HolyBook,
+    #[serde(rename = "1")]
+    pub bible: HolyBook,
+    #[serde(rename = "2")]
+    pub quran: HolyBook,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HolyBook {
+    pub book: String,
+    pub book_number: Option<i64>,
+    pub chapter: i64,
+    pub text: String,
 }

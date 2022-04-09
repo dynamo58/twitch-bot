@@ -76,6 +76,9 @@ pub async fn handle_command(
 		"remind"         => add_reminder(&pool, &auth, cache_arc, &cmd, false).await,
 		"rose"           => tag_rand_chatter_with_rose(&cmd.channel, &config.disregarded_users).await,
 		"bench"          => bench_command(&pool, client.clone(), config, &auth, cache_arc, cmd.clone()).await,
+		"bible"          => get_rand_holy_book_verse(api::HolyBook::Bible).await,
+		"tanakh"         => get_rand_holy_book_verse(api::HolyBook::Tanakh).await,
+		"quran"          => get_rand_holy_book_verse(api::HolyBook::Quran).await,
 		// special commands
 		"pipe"           => pipe(&pool, client.clone(), config, &auth, cache_arc, &cmd).await,
 		""               => execute_alias(&pool, client.clone(), config, &auth, cache_arc, &cmd).await,
@@ -993,4 +996,20 @@ pub async fn get_time(
 		Some(a) => Ok(Some(a)),
 		None    => Ok(Some("❌ The location was not found".into()))
 	}
+}
+
+pub async fn get_rand_holy_book_verse(
+	book_kind: api::HolyBook,
+) -> anyhow::Result<Option<String>> {
+	let holy_book = api::get_rand_holy_book_verse(book_kind).await?;
+
+	let book        = holy_book.book;
+	let text        = holy_book.text;
+	let book_number = match holy_book.book_number {
+		Some(b) => format!(", book {b}"),
+		None    => "".into(),
+	};
+	let chapter     = holy_book.chapter;
+
+	Ok(Some(format!("({book}{book_number} ch. {chapter}) {text}")))
 }

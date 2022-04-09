@@ -1,13 +1,13 @@
 #![allow(unused)]
 
-use crate::TwitchAuth;
+use crate::{TwitchAuth, MyError};
 use crate::api_models as models;
 
 use std::fmt::Display;
 
 use chrono::{DateTime, Utc};
+use rand::{thread_rng, Rng};
 use reqwest::Client;
-
 
 // —————————————————————————————————————————
 //               Twitch API
@@ -607,4 +607,46 @@ pub async fn get_time(
     };
 
     Ok(Some(format!("{}, (timezone {} {gmt_offset})", parsed.date_time, parsed.timezone)))
+}
+
+pub enum HolyBook {
+    Quran,
+    Bible,
+    Tanakh,
+}
+
+impl HolyBook {
+    pub fn from_str(s: &str) -> anyhow::Result<Self, MyError> {
+        match &s.to_lowercase()[..] {
+            "quran"  => Ok(Self::Quran),
+            "bible"  => Ok(Self::Bible),
+            "tanakh" => Ok(Self::Tanakh),
+            _        => Err(MyError::NotFound),
+        }
+    }
+}
+
+pub async fn get_rand_holy_book_verse(
+    book_kind: HolyBook,
+) -> anyhow::Result<models::HolyBook> {
+    let client = Client::new();
+
+    let rand_year : u16 = rand::thread_rng().gen_range(1000..2023);
+    let rand_month: u16 = rand::thread_rng().gen_range(1..13);
+    let rand_day  : u16 = rand::thread_rng().gen_range(1..29);
+
+    let res = client
+        .get(&format!("https://devotionalium.com/api/v2?date={rand_year}-{rand_month}-{rand_day}"))
+        .send()
+        .await?
+        .text()
+        .await?;
+    
+    let parsed: models::DevotionaliumResponse = serde_json::from_str(&res)?;
+
+    match book_kind {
+        HolyBook::Bible  => return Ok(parsed.bible),
+        HolyBook::Tanakh => return Ok(parsed.tanakh),
+        HolyBook::Quran  => return Ok(parsed.quran),
+    }
 }

@@ -39,6 +39,7 @@ pub enum TwitchBadge {
 	Unrecognized,
 	GLHFPledge,
 	Bits,
+	BitsCharity,
 }
 
 // twitch authentification credentials
@@ -129,6 +130,7 @@ impl CommandSource {
 				"glitchcon2020" => TwitchBadge::GlitchCon2020,
 				"glhf-pledge"   => TwitchBadge::GLHFPledge,
 				"bits"          => TwitchBadge::Bits,
+				"bits-charity"  => TwitchBadge::BitsCharity,
 				_ => {
 					println!(
 						"{} Encountered unrecognized badge: {}",

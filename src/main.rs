@@ -227,5 +227,6 @@ async fn main() -> anyhow::Result<()> {
 	);
 	std::mem::drop(t);
     message_listener_handle.await.unwrap();
+
     Ok(())
 }
