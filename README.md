@@ -83,13 +83,9 @@ This bot also uses various third-party APIs, those include (but may not be limit
 
 The bot by has grown to have many features, check out some of the commands one could use!
 
-<img src="./docs/img/bot-showcase_weather.webp" width="300"><br><br>
-<img src="./docs/img/bot-showcase_chat-stats.webp" width="300"><br><br>
-<img src="./docs/img/bot-showcase_alias.webp" width="300"><br><br>
-<img src="./docs/img/bot-showcase_trivia.webp" width="300"><br><br>
-<img src="./docs/img/bot-showcase_channel-cmd.webp" width="300"><br><br>
-<img src="./docs/img/bot-showcase_pipe.webp" width="300">
-
-
-
-
+<img src="./docs/img/bot-showcase_weather.gif" width="300"><br><br>
+<img src="./docs/img/bot-showcase_chat-stats.gif" width="300"><br><br>
+<img src="./docs/img/bot-showcase_alias.gif" width="300"><br><br>
+<img src="./docs/img/bot-showcase_trivia.gif" width="300"><br><br>
+<img src="./docs/img/bot-showcase_channel-cmd.gif" width="300"><br><br>
+<img src="./docs/img/bot-showcase_pipe.gif" width="300">

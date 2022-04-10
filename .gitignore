@@ -1,4 +1,5 @@
 /target
+/docs/img/*.webp
 db.*
 .env
 _.todo
