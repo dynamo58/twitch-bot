@@ -10,6 +10,7 @@ use crate::{
 	NameIdCache,
 	Config,
 	fmt_duration,
+	convert_html_entities,
 };
 
 use std::sync::{Arc, Mutex};
@@ -35,6 +36,7 @@ pub async fn handle_command(
 	cache_arc: Arc<Mutex<NameIdCache>>,
 	cmd:        CommandSource,
 	is_pipe:    bool,
+	ongoing_trivia_games_arc: Arc<Mutex<crate::OngoingTriviaGames>>,
 ) -> Option<String> {
 	let cache_arc2 = cache_arc.clone();
 	if let Ok(mut cache) = cache_arc2.lock() {
@@ -47,8 +49,6 @@ pub async fn handle_command(
 		// standard commands
 		"ping"           => ping(),
 		"decide"         => decide(&cmd),
-		"echo"           => echo(&cmd.args),
-		"say"            => echo(&cmd.args),
 		"time"           => get_time(&cmd).await,
 		// "translate"      => translate(&cmd).await,
 		"markov"         => markov(&pool, &cmd).await,
@@ -56,6 +56,8 @@ pub async fn handle_command(
 		"suggest"        => suggest(&pool, &cmd).await,
 		"reddit"         => get_reddit_post(&cmd).await,
 		"wiki"           => query_wikipedia(&cmd).await,
+		"echo"           => echo(&cmd.args),
+		"say"            => echo(&cmd.args),
 		"define"         => query_dictionary(&cmd).await,
 		"setalias"       => set_alias(&pool, &cmd).await,
 		"uptime"         => get_uptime(&auth, &cmd).await,
@@ -71,17 +73,20 @@ pub async fn handle_command(
 		"clearreminders" => clear_reminders(&pool, cmd.sender.id).await,
 		"rmrm"           => clear_reminders(&pool, cmd.sender.id).await,
 		"first"          => first_message(&pool, &auth, cache_arc, &cmd).await,
+		"bible"          => get_rand_holy_book_verse(api::HolyBook::Bible).await,
+		"quran"          => get_rand_holy_book_verse(api::HolyBook::Quran).await,
+		"tanakh"         => get_rand_holy_book_verse(api::HolyBook::Tanakh).await,
 		"remindme"       => add_reminder(&pool, &auth, cache_arc, &cmd, true).await,
 		"wordratio"      => get_word_ratio(&pool, &auth, &cmd, config.prefix).await,
 		"remind"         => add_reminder(&pool, &auth, cache_arc, &cmd, false).await,
+		"giveup"         => give_up_trivia(&cmd, &auth,ongoing_trivia_games_arc).await,
+		"commands"       => echo(&vec![format!("🛠️ {}", config.commands_reference_path)]),
+		"trivia"         => attempt_start_trivia_game(&cmd, &auth, ongoing_trivia_games_arc).await,
 		"rose"           => tag_rand_chatter_with_rose(&cmd.channel, &config.disregarded_users).await,
-		"bench"          => bench_command(&pool, client.clone(), config, &auth, cache_arc, cmd.clone()).await,
-		"bible"          => get_rand_holy_book_verse(api::HolyBook::Bible).await,
-		"tanakh"         => get_rand_holy_book_verse(api::HolyBook::Tanakh).await,
-		"quran"          => get_rand_holy_book_verse(api::HolyBook::Quran).await,
+		"bench"          => bench_command(&pool, client.clone(), config, &auth, cache_arc, cmd.clone(), ongoing_trivia_games_arc).await,
 		// special commands
-		"pipe"           => pipe(&pool, client.clone(), config, &auth, cache_arc, &cmd).await,
-		""               => execute_alias(&pool, client.clone(), config, &auth, cache_arc, &cmd).await,
+		"pipe"           => pipe(&pool, client.clone(), config, &auth, cache_arc, &cmd, ongoing_trivia_games_arc).await,
+		""               => execute_alias(&pool, client.clone(), config, &auth, cache_arc, &cmd, ongoing_trivia_games_arc).await,
 		_                => try_execute_channel_command(&pool, &cmd).await,
 	};
 
@@ -108,10 +113,30 @@ pub async fn handle_command(
 	};
 	
 	if let Some(output) = cmd_out {
-		client.say(cmd.channel, output.into()).await.unwrap();
+		let out = {
+			if output.len() > 500 {
+				(&output[..500]).into()
+			} else {
+				output
+			}
+		};
+
+		client.say(cmd.channel, out).await.unwrap();
 	}
 
 	None
+}
+
+// ping -> pong
+fn ping()
+-> anyhow::Result<Option<String>> {
+	Ok(Some("pong".into()))
+}
+
+// say whatever caller said
+fn echo(args: &Vec<String>)
+-> anyhow::Result<Option<String>> {
+	Ok(Some(args.join(" ")))
 }
 
 // get age of specified account (or called)
@@ -167,6 +192,7 @@ async fn execute_alias(
 	auth: &TwitchAuth,
 	cache_arc: Arc<Mutex<NameIdCache>>,
 	cmd: &CommandSource,
+	ongoing_trivia_games_arc: Arc<Mutex<crate::OngoingTriviaGames>>,
 ) -> anyhow::Result<Option<String>> {
 	let alias = match &cmd.args.get(0).clone() {
 		Some(a) => a.clone(),
@@ -195,7 +221,7 @@ async fn execute_alias(
 		timestamp: cmd.timestamp.clone(),
 	};
 
-	handle_command(pool, client, config, auth, cache_arc, new_cmd, false).await;
+	handle_command(pool, client, config, auth, cache_arc, new_cmd, false, ongoing_trivia_games_arc.clone()).await;
 
 	Ok(None)
 }
@@ -233,6 +259,10 @@ async fn add_reminder(
 	cmd: &CommandSource,
 	is_for_self: bool,
 ) -> anyhow::Result<Option<String>> {
+	if cmd.args.len() == 0 {
+		return Ok(Some("❌ insufficient args".into()));
+	}
+
 	let (h, m) = match parse_duration_to_hm(&cmd.args[0]) {
 		Ok(a) => a,
 		Err(_) => return Ok(Some("❌ bad time formatting".into()))
@@ -303,18 +333,6 @@ async fn clear_reminders(
 	} else {
 		return Ok(Some(format!("✅ cleared {delete_count} reminders")));
 	}
-}
-
-// ping -> pong
-fn ping()
--> anyhow::Result<Option<String>> {
-	Ok(Some("pong".into()))
-}
-
-// say whatever caller said
-fn echo(args: &Vec<String>)
--> anyhow::Result<Option<String>> {
-	Ok(Some(args.join(" ")))
 }
 
 // return a markov chain of words
@@ -553,6 +571,7 @@ async fn bench_command(
 	auth:       &TwitchAuth,
 	cache_arc:  Arc<Mutex<NameIdCache>>,
 	cmd:        CommandSource,
+	ongoing_trivia_games_arc: Arc<Mutex<crate::OngoingTriviaGames>>,
 ) -> anyhow::Result<Option<String>> {
 	let new_cmd = CommandSource {
 		cmd: match cmd.args.get(0) {
@@ -569,7 +588,7 @@ async fn bench_command(
 	};
 
 	let now = Instant::now();
-	handle_command(pool, client, config, auth, cache_arc, new_cmd, true).await;
+	handle_command(pool, client, config, auth, cache_arc, new_cmd, true, ongoing_trivia_games_arc.clone()).await;
 	Ok(Some(format!("📡 {} ms", now.elapsed().as_millis())))
 }
 
@@ -852,6 +871,7 @@ async fn pipe(
 	auth:      &TwitchAuth,
 	cache_arc: Arc<Mutex<NameIdCache>>,
 	cmd:       &CommandSource,
+	ongoing_trivia_games_arc: Arc<Mutex<crate::OngoingTriviaGames>>,
 ) -> anyhow::Result<Option<String>> {
 	let commands: Vec<String> = cmd.args
 		.join(" ")
@@ -897,7 +917,7 @@ async fn pipe(
 			timestamp: cmd.timestamp.clone(),
 		};
 
-		if let Some(output) = handle_command(pool, client.clone(), config, auth, cache_arc.clone(), new_cmd, true).await {
+		if let Some(output) = handle_command(pool, client.clone(), config, auth, cache_arc.clone(), new_cmd, true, ongoing_trivia_games_arc.clone()).await {
 			temp_output = output;
 		} else {
 			temp_output = "".to_owned();
@@ -1012,4 +1032,50 @@ pub async fn get_rand_holy_book_verse(
 	let chapter     = holy_book.chapter;
 
 	Ok(Some(format!("({book}{book_number} ch. {chapter}) {text}")))
+}
+
+// start a trivia game (if one is not going on)
+pub async fn attempt_start_trivia_game(
+	cmd:                      &CommandSource,
+	twitch_auth:              &TwitchAuth,
+	ongoing_trivia_games_arc: Arc<Mutex<crate::OngoingTriviaGames>>,
+) -> anyhow::Result<Option<String>, anyhow::Error> {
+	let channel_id = api::id_from_nick(&cmd.channel, twitch_auth).await?.unwrap();
+	
+	let cat = api::TriviaCategory::from_vec(&cmd.args);
+	let dif = api::TriviaDifficulty::from_vec(&cmd.args);
+	let typ = api::TriviaType::from_vec(&cmd.args);
+	
+	let question  = api::fetch_trivia_question(cat, dif, typ).await?;
+
+	if let Ok(mut cache) = ongoing_trivia_games_arc.lock() {
+		if let Some(_) = (*cache).get(&channel_id.to_string()) {
+			return Ok(Some("❌ there is currently a game going on!".into()));
+		}
+
+		(*cache).insert(channel_id.to_string(), convert_html_entities(question.correct_answer));
+		return Ok(Some(format!("{}", convert_html_entities(question.question))));
+	} else {
+		return Ok(Some("An internal error has occured".into()));
+	}
+}
+
+pub async fn give_up_trivia(
+	cmd:                      &CommandSource,
+	twitch_auth:              &TwitchAuth,
+	ongoing_trivia_games_arc: Arc<Mutex<crate::OngoingTriviaGames>>,
+) -> anyhow::Result<Option<String>> {
+	let channel_id = api::id_from_nick(&cmd.channel, twitch_auth).await?.unwrap();
+
+	if let Ok(mut cache) = ongoing_trivia_games_arc.lock() {
+		if let Some(correct_answer) = (*cache).get(&channel_id.to_string()) {
+			let c = correct_answer.clone();
+			(*cache).remove(&channel_id.to_string());
+			return Ok(Some(format!("So bad LUL | The answer was \'{c}\'")));
+		}
+		
+		return Ok(Some("❌ there was no game going on LUL".into()));
+	}
+	
+	return Ok(Some("An internal error has occured".into()));
 }

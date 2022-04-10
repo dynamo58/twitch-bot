@@ -2,6 +2,7 @@
 	"prefix": "$",
 	"index_markov": true,
 	"track_offliners": true,
+	"commands_reference_path": "https://github.com/dynamo58/twitch-bot#commands",
 	"channels": [
 		"gisthekey",
 		"lovcen",

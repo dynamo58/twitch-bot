@@ -407,3 +407,23 @@ pub struct HolyBook {
     pub chapter: i64,
     pub text: String,
 }
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TriviaResponse {
+    pub results: Vec<TriviaQuestion>,
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TriviaQuestion {
+    pub category: String,
+    #[serde(rename = "type")]
+    pub type_field: String,
+    pub difficulty: String,
+    pub question: String,
+    #[serde(rename = "correct_answer")]
+    pub correct_answer: String,
+    #[serde(rename = "incorrect_answers")]
+    pub incorrect_answers: Vec<String>,
+}

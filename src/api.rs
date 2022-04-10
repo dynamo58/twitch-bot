@@ -650,3 +650,247 @@ pub async fn get_rand_holy_book_verse(
         HolyBook::Quran  => return Ok(parsed.quran),
     }
 }
+
+// https://opentdb.com/api_config.php
+
+#[derive(PartialEq)]
+pub enum TriviaCategory {
+    Any,
+    GeneralKnowledge,
+    EntertainmentBoardGames,
+    EntertainmentBooks,
+    EntertainmentCartoonAndAnimations,
+    EntertainmentComics,
+    EntertainmentFilm,
+    EntertainmentJapaneseAnimeAndSaga,
+    EntertainmentMusic,
+    EntertainmentMusicalsAndTheatres,
+    EntertainmentTelevision,
+    EntertainmentVideoGames,
+    ScienceAndNature,
+    ScienceComputers,
+    ScienceGadgets,
+    ScienceMathematics,
+    Mythology,
+    Sports,
+    Geography,
+    History,
+    Politics,
+    Art,
+    Celebrities,
+    Animals,
+    Vehicles,
+}
+
+impl TriviaCategory {
+    pub fn from_vec(v: &Vec<String>) -> Self {
+        let args = v.join(" ").to_lowercase();
+        let cats = ["any category", "general knowledge", "board games", "books", "cartoons", "comics", "film", "anime", "music", "musical", "musicals", "theatre", "television", "games", "video games", "science", "cs", "computer science", "gadgets", "math", "mathematics", "mythology", "sport", "sports", "geography", "geo", "history", "politics", "art", "celebrities", "animals", "vehicles"];
+
+        // the default index
+        let mut cat_idx = 0;
+
+        for cat in &cats {
+            if args.contains(cat) {
+                cat_idx = cats.iter().position(|r| r == cat).unwrap();
+                break;
+            }
+        }
+
+        // this is rather stupid but no other way to do it i guess
+        // and not bored enough to do an ad hoc macro
+        match cat_idx {
+            0  => Self::Any,
+            1  => Self::GeneralKnowledge,
+            2  => Self::EntertainmentBoardGames,
+            3  => Self::EntertainmentBooks,
+            4  => Self::EntertainmentCartoonAndAnimations,
+            5  => Self::EntertainmentComics,
+            6  => Self::EntertainmentFilm,
+            7  => Self::EntertainmentJapaneseAnimeAndSaga,
+            8  => Self::EntertainmentMusic,
+            9  => Self::EntertainmentMusicalsAndTheatres,
+            10 => Self::EntertainmentMusicalsAndTheatres,
+            11 => Self::EntertainmentMusicalsAndTheatres,
+            12 => Self::EntertainmentTelevision,
+            13 => Self::EntertainmentVideoGames,
+            14 => Self::EntertainmentVideoGames,
+            15 => Self::ScienceAndNature,
+            16 => Self::ScienceComputers,
+            17 => Self::ScienceComputers,
+            18 => Self::ScienceGadgets,
+            19 => Self::ScienceMathematics,
+            20 => Self::ScienceMathematics,
+            21 => Self::Mythology,
+            22 => Self::Sports,
+            23 => Self::Sports,
+            24 => Self::Geography,
+            25 => Self::Geography,
+            26 => Self::History,
+            27 => Self::Politics,
+            28 => Self::Art,
+            29 => Self::Celebrities,
+            30 => Self::Animals,
+            31 => Self::Vehicles,
+            _ => Self::Any,
+        }
+    }
+
+    pub fn to_opentdb_index(&self) -> &'static str {
+        match self {
+            // this is literally cringe
+            // the fact that they have this as "any"
+            // means that i cannot just simply use
+            // an enum associated value, NO NO NO
+            Self::Any                               => "any", // like why can't this just be 0 ...
+            Self::GeneralKnowledge                  => "9",
+            Self::EntertainmentBooks                => "10",
+            Self::EntertainmentFilm                 => "11",
+            Self::EntertainmentMusic                => "12",
+            Self::EntertainmentMusicalsAndTheatres  => "13",
+            Self::EntertainmentTelevision           => "14",
+            Self::EntertainmentVideoGames           => "15",
+            Self::EntertainmentBoardGames           => "16",
+            Self::ScienceAndNature                  => "17",
+            Self::ScienceComputers                  => "18",
+            Self::ScienceMathematics                => "19",
+            Self::Mythology                         => "20",
+            Self::Sports                            => "21",
+            Self::Geography                         => "22",
+            Self::History                           => "23",
+            Self::Politics                          => "24",
+            Self::Art                               => "25",
+            Self::Celebrities                       => "26",
+            Self::Animals                           => "27",
+            Self::Vehicles                          => "28",
+            Self::EntertainmentComics               => "29",
+            Self::ScienceGadgets                    => "30",
+            Self::EntertainmentJapaneseAnimeAndSaga => "31",
+            Self::EntertainmentCartoonAndAnimations => "32",
+        }
+    }
+}
+
+#[derive(PartialEq)]
+pub enum TriviaDifficulty {
+    Any,
+    Easy,
+    Medium,
+    Hard,
+}
+
+impl TriviaDifficulty {
+    pub fn from_vec(v: &Vec<String>) -> Self {
+        let args = v.join(" ").to_lowercase();
+        let cats = ["any difficulty", "easy", "medium", "hard"];
+        
+        // the default difficulty
+        let mut cat_idx = 0;
+
+        for cat in &cats {
+            if args.contains(cat) {
+                cat_idx = cats.iter().position(|r| r == cat).unwrap();
+                break;
+            }
+        }
+
+        match cat_idx {
+            0 => Self::Any,
+            1 => Self::Easy,
+            2 => Self::Medium,
+            3 => Self::Hard,
+            _ => Self::Any,
+        }
+    }
+
+    pub fn to_opentdb_index(&self) -> &'static str {
+        match self {
+            Self::Any    => "any",
+            Self::Easy   => "easy",
+            Self::Medium => "medium",
+            Self::Hard   => "hard",
+        }
+    }
+}
+
+#[derive(PartialEq)]
+pub enum TriviaType {
+    Any,
+    Multiple,
+    TrueFalse,
+}
+
+impl TriviaType {
+    pub fn from_vec(v: &Vec<String>) -> Self {
+        let args = v.join(" ").to_lowercase();
+        let cats = ["any type", "multiple", "true false"];
+
+        // the default index
+        let mut cat_idx = 0;
+
+        for cat in &cats {
+            if args.contains(cat) {
+                cat_idx = cats.iter().position(|r| r == cat).unwrap();
+                break;
+            }
+        }
+
+        // this is rather stupid but no other way to do it i guess
+        // and not bored enough to do an ad hoc macro
+        match cat_idx {
+            0 => Self::Any,
+            1 => Self::Multiple,
+            2 => Self::TrueFalse,
+            _ => Self::Any,
+        }
+    }
+
+    pub fn to_opentdb_index(&self) -> &'static str {
+        match self {
+            Self::Any       => "any",
+            Self::Multiple  => "multiple",
+            Self::TrueFalse => "boolean",
+        }
+    }
+}
+
+pub async fn fetch_trivia_question(
+    cat:   TriviaCategory,
+    diff:  TriviaDifficulty,
+    ttype: TriviaType,
+) -> anyhow::Result<models::TriviaQuestion> {
+    let cat = {
+        if cat == TriviaCategory::Any {
+            "".into()
+        } else {
+            format!("&category={}", cat.to_opentdb_index())
+        }
+    };
+    let diff = {
+        if diff == TriviaDifficulty::Any {
+            "".into()
+        } else {
+            format!("&difficulty={}", diff.to_opentdb_index())
+        }
+    };
+    let ttype = {
+        if ttype == TriviaType::Any {
+            "".into()
+        } else {
+            format!("&type={}", ttype.to_opentdb_index())
+        }
+    };
+
+    let client = Client::new();
+
+    let res = client
+        .get(&format!("https://opentdb.com/api.php?amount=1{cat}{diff}{ttype}"))
+        .send()
+        .await?
+        .text()
+        .await?;
+    
+    let parsed: models::TriviaResponse = serde_json::from_str(&res)?;
+
+    Ok(parsed.results[0].clone())
+}

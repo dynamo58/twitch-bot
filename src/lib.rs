@@ -22,6 +22,8 @@ pub enum MyError {
 	OutOfBounds,
 	#[error("item not found")]
 	NotFound,
+	#[error("Thread error")]
+	ThreadError,
 }
 
 // All the statuses one can have in Twitch chat
@@ -66,6 +68,7 @@ impl TwitchAuth {
 pub struct Config {
 	pub channels: Vec<String>,
 	pub disregarded_users: Vec<String>,
+	pub commands_reference_path: String,
 	pub prefix: char,
 	pub index_markov: bool,
 	pub track_offliners: bool,
@@ -159,8 +162,11 @@ impl CommandSource {
 	}
 }
 
-pub type NameIdCache = HashMap<String, i32>;
-
+// Is used to cache the emotes of the channel
+// in order not to overwhelm the APIs;
+// emotes are (as of know) used only to
+// decide whether to convert to lowercase
+// when saving markov entries into the database
 #[derive(Clone)]
 pub struct EmoteCache {
 	// channels the bot is joined to
@@ -172,6 +178,7 @@ pub struct EmoteCache {
 	// have to be processed from the Privmsg directly
 }
 
+pub type NameIdCache = HashMap<String, i32>;
 pub type Cashe = EmoteCache;
 
 impl EmoteCache {
@@ -259,6 +266,17 @@ impl EmoteCache {
 		Ok(())
 	}
 }
+
+// converts html entities to actual chars (only some selected ones, not all!!) 
+pub fn convert_html_entities(s: String) -> String {
+    s
+        .replace("&nbsp;", " ")
+        .replace("&#039;", "'")
+        .replace("&quot;", "\"")
+		.replace("&Delta;", "d") 
+}
+
+pub type OngoingTriviaGames = HashMap<String, String>; 
 
 pub fn fmt_duration(dur: chrono::Duration) -> String {
 	let mut out = String::new();

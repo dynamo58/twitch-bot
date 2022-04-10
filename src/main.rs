@@ -13,7 +13,9 @@ use twitch_bot::{
 	TwitchBadge,
 	fmt_duration,
 	NameIdCache,
-	EmoteCache
+	EmoteCache,
+	OngoingTriviaGames,
+	convert_html_entities
 };
 use background as bg;
 use commands::handle_command;
@@ -62,6 +64,9 @@ async fn main() -> anyhow::Result<()> {
 			Err(e) => panic!("{}", e),
 		}
 	}));
+
+	// encompasses all of the trivia games that are going on
+	let ongoing_trivia_games = Arc::new(Mutex::new(OngoingTriviaGames::new()));
 	
 	// instantiate database connection pool
     let pool = SqlitePool::connect(DB_PATH)
@@ -144,6 +149,7 @@ async fn main() -> anyhow::Result<()> {
 		let auth = auth.clone();
 		let nameid_cache_arc = name_id_cache.clone();
 		let emote_cache_arc = emote_cache.clone();
+		let ongoing_trivia_games_arc = ongoing_trivia_games.clone();
 
 		tokio::spawn(async move {
 			// capture incoming messages
@@ -207,11 +213,31 @@ async fn main() -> anyhow::Result<()> {
 					// if message is a command, handle it
 					if privmsg.message_text.chars().nth(0).unwrap() == config.prefix {
 						let cmd_src = CommandSource::from_privmsg(privmsg);
-						handle_command(&pool, client.clone(), &config, &auth, nameid_cache_arc.clone(), cmd_src, false).await;
+						handle_command(&pool, client.clone(), &config, &auth, nameid_cache_arc.clone(), cmd_src, false, ongoing_trivia_games_arc.clone()).await;
 					} else {
 						// index for markov if enabled by config
 						if config.index_markov {
 							db::log_markov(&pool, &emote_cache_arc, &privmsg).await.unwrap();
+						}
+
+						let channel_id = &privmsg.source.tags.0.get("room-id");
+						if let Some(Some(room_id)) = channel_id {
+							let mut correct = false;
+							if let Ok(mut cache) = ongoing_trivia_games_arc.lock() {
+								if let Some(correct_answer) = (*cache).get(room_id) {
+									if correct_answer.to_lowercase() == privmsg.message_text.to_lowercase() {
+										(*cache).remove(room_id);
+										correct = true;
+									}
+								}
+							}
+
+							if correct {
+								client.say(
+									privmsg.source.params[0][1..].to_owned(),
+									format!("@{} Correct!", privmsg.sender.name),
+								).await.unwrap();
+							}
 						}
 					}
 				}
