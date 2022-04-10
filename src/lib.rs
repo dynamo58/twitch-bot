@@ -42,6 +42,7 @@ pub enum TwitchBadge {
 	GLHFPledge,
 	Bits,
 	BitsCharity,
+	Partner,
 }
 
 // twitch authentification credentials
@@ -134,6 +135,7 @@ impl CommandSource {
 				"glhf-pledge"   => TwitchBadge::GLHFPledge,
 				"bits"          => TwitchBadge::Bits,
 				"bits-charity"  => TwitchBadge::BitsCharity,
+				"partner"       => TwitchBadge::Partner,
 				_ => {
 					println!(
 						"{} Encountered unrecognized badge: {}",
@@ -273,7 +275,11 @@ pub fn convert_html_entities(s: String) -> String {
         .replace("&nbsp;", " ")
         .replace("&#039;", "'")
         .replace("&quot;", "\"")
-		.replace("&Delta;", "d") 
+		.replace("&Delta;", "d")
+		.replace("&deg;", " degrees")
+		.replace("&rsquo;", "’")
+		.replace("&hellip;", "…")
+		.replace("&rdquo;", "”")
 }
 
 pub type OngoingTriviaGames = HashMap<String, String>; 

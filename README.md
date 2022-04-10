@@ -49,9 +49,9 @@ A simple sophisticated Twitch bot in Rust.
 | uptime         | [channel: opt(str)]                                                        | get the uptime of a streamer                                       | None
 | wordratio      | [user: opt(str)] [word: str]                                               | get the ratio of messages of a user that contain certain word      | None
 | time           | [location: text]                                                           | get the local time in the specified location                       | None
+<!-- | translate      | (from,to) [text]                     | translate some text |  -->
 | trivia         | opt(hard/easy/medium) opt(...category) opt(multiple/true false)            | start a trivia game (anyone in the chat can answer)                | None
 
-<!-- | translate      | (from,to) [text]                     | translate some text |  -->
 
 # Run yourself
 
@@ -67,14 +67,29 @@ This bot is heavily inspired by other Twitch bots, takes some of their features 
 - [Supibot](https://github.com/Supinic/supibot) made by [Supinic](https://www.twitch.tv/supinic)
 - [kbot](https://github.com/KUNszg/kbot) made by [KUNszg](https://kunszg.com/)
 
-This bot also uses various third-party APIs, most notably, those are
+This bot also uses various third-party APIs, those include (but may not be limited to)
 - [Twitch API](https://dev.twitch.tv/docs/api/); obviously
 - [OpenTDB](https://opentdb.com/) for querying trivia questions
-- [ipgeolocation] for timezone api (no link because shows IP xd)
+- [ipgeolocation]() for timezone api (no link because shows IP xd)
 - [Pastebin](https://pastebin.com/) dumping data on demand
-- [wttr.in] to query weather information (no link because may show location)
+- [wttr.in]() to query weather information (no link because may show location)
 - [Devotionalium](https://devotionalium.com/web) to query verses of books
 - [Reddit](https://www.reddit.com/) to query Reddit posts
 - [Urban Dictionary](https://www.urbandictionary.com/) to query Urban dictionary posts
 - [Wikipedia](https://en.wikipedia.org/wiki/Main_Page) to query gists of Wiki posts
 - [Dictionary API](https://dictionaryapi.dev/) to query english dictionary words
+
+# Examples
+
+The bot by has grown to have many features, check out some of the commands one could use!
+
+<img src="./docs/img/bot-showcase_weather.webp" width="300"><br><br>
+<img src="./docs/img/bot-showcase_chat-stats.webp" width="300"><br><br>
+<img src="./docs/img/bot-showcase_alias.webp" width="300"><br><br>
+<img src="./docs/img/bot-showcase_trivia.webp" width="300"><br><br>
+<img src="./docs/img/bot-showcase_channel-cmd.webp" width="300"><br><br>
+<img src="./docs/img/bot-showcase_pipe.webp" width="300">
+
+
+
+

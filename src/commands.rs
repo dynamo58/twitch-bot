@@ -354,6 +354,10 @@ async fn markov(
 		}
 	}
 
+	let rounds = {
+		if rounds > 100 { 100 } else { rounds }
+	};
+
 	let mut output: Vec<String> = vec![cmd.args[0].clone()];
 	let mut seed: String = cmd.args[0].clone();
 
