@@ -49,12 +49,12 @@ pub enum TwitchBadge {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TwitchAuth {
 	pub client_id: String,
-	pub oauth: String,
-	pub nick: String,
+	pub oauth:     String,
+	pub nick:      String,
 }
 
 impl TwitchAuth {
-	pub fn from_dotenv() -> anyhow::Result<TwitchAuth> {
+	pub fn from_env() -> anyhow::Result<TwitchAuth> {
 		let oauth     = std::env::var("TWITCH_OAUTH")?;
 		let client_id = std::env::var("TWITCH_CLIENT_ID")?;
 		let nick      = std::env::var("TWITCH_NICK")?;
@@ -180,9 +180,6 @@ pub struct EmoteCache {
 	// have to be processed from the Privmsg directly
 }
 
-pub type NameIdCache = HashMap<String, i32>;
-pub type Cashe = EmoteCache;
-
 impl EmoteCache {
 	pub async fn init(
 		config: &Config,
@@ -268,6 +265,10 @@ impl EmoteCache {
 		Ok(())
 	}
 }
+
+// store the users' Twitch ID
+pub type NameIdCache = HashMap<String, i32>;
+
 
 // converts html entities to actual chars (only some selected ones, not all!!) 
 pub fn convert_html_entities(s: String) -> String {

@@ -9,7 +9,6 @@ use twitch_bot::{
 	CommandSource,
 	MyError,
 	TwitchAuth, 
-	Cashe,
 	TwitchBadge,
 	fmt_duration,
 	NameIdCache,
@@ -43,23 +42,24 @@ async fn main() -> anyhow::Result<()> {
 	// load environment variables from `.env` file
 	dotenv().ok();
 	
-	// init tracing subscriber
-	// tracing_subscriber::fmt::init();
+
 
 	// load all of the credentials and configurations
 	let config = Config::from_config_file()
 		.expect(&format!("{}   Couldn't load config, aborting.", "ERROR  ".red().bold()));
-	let auth = TwitchAuth::from_dotenv()
+	let auth = TwitchAuth::env()
 		.expect(&format!("{}   Couldn't load Twitch credentials from .env", "ERROR  ".red().bold()));
 
 	println!("{}   Obtained credentials and config from local files", "INFO   ".blue().bold());
 	
+
+
 	// this will hold cached names and ids of users
 	// to prevent flooding the Twitch API too much
 	let name_id_cache = Arc::new(Mutex::new(NameIdCache::new()));
 
 	let emote_cache = Arc::new(Mutex::new({
-		match Cashe::init(&config, &auth).await {
+		match EmoteCache::init(&config, &auth).await {
 			Ok(e) => e,
 			Err(e) => panic!("{}", e),
 		}
@@ -68,10 +68,14 @@ async fn main() -> anyhow::Result<()> {
 	// encompasses all of the trivia games that are going on
 	let ongoing_trivia_games = Arc::new(Mutex::new(OngoingTriviaGames::new()));
 	
+
+	
 	// instantiate database connection pool
     let pool = SqlitePool::connect(DB_PATH)
 		.await
 		.expect(&format!("{}   Database connection could not be established, aborting.", "ERROR  ".red().bold()));
+
+
 
 	// create all of that stuff necessary
 	// to be present in database
@@ -92,6 +96,8 @@ async fn main() -> anyhow::Result<()> {
 				)
 			);
 	}
+	println!("{}   Created tables in db", "INFO   ".blue().bold());
+
 
 	// instantiate Twitch client
 	let client_config: ClientConfig<StaticLoginCredentials> = ClientConfig::new_simple(
@@ -109,6 +115,8 @@ async fn main() -> anyhow::Result<()> {
 		println!("{}   Joined #{}", "INFO   ".blue().bold(), channel.bold());
 	}
 
+
+
 	// set up tasks running periodcally in thebackground
 	{
 		let _pool = pool.clone();
@@ -116,7 +124,6 @@ async fn main() -> anyhow::Result<()> {
 		let _auth = auth.clone();
 		let _name_id_cache = name_id_cache.clone();
 		
-
 		if config.track_offliners {
 			tokio::spawn(async move {
 				loop {
@@ -142,9 +149,11 @@ async fn main() -> anyhow::Result<()> {
 			}
 		});
 	}
-
 	println!("{}   Set up scheduled tasks", "INFO   ".blue().bold());
 
+
+
+	// handle incoming messages
     let message_listener_handle = {
 		let auth = auth.clone();
 		let nameid_cache_arc = name_id_cache.clone();
@@ -152,7 +161,6 @@ async fn main() -> anyhow::Result<()> {
 		let ongoing_trivia_games_arc = ongoing_trivia_games.clone();
 
 		tokio::spawn(async move {
-			// capture incoming messages
 			while let Some(message) = incoming_messages.recv().await {
 				// privmsg == chat message
 				if let ServerMessage::Privmsg(privmsg) = message {
@@ -205,11 +213,11 @@ async fn main() -> anyhow::Result<()> {
 							
 							client.clone().say(
 								privmsg.source.params[0][1..].to_owned(),
-								format!("@{for_user} 🔔🗨👤 {from_user}: {}", r.message)
+								format!("@{for_user} 🔔🗨 {from_user}: {}", r.message)
 							).await.unwrap();
 						}
 					}
-	
+
 					// if message is a command, handle it
 					if privmsg.message_text.chars().nth(0).unwrap() == config.prefix {
 						let cmd_src = CommandSource::from_privmsg(privmsg);
@@ -251,7 +259,6 @@ async fn main() -> anyhow::Result<()> {
 		"SUCCESS".green().bold(),
 		&t[..t.len()-17]
 	);
-	std::mem::drop(t);
     message_listener_handle.await.unwrap();
 
     Ok(())
