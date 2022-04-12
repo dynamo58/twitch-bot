@@ -91,11 +91,19 @@ impl Config {
 	}
 }
 
+// the sender of a message
 #[derive(Clone)]
 pub struct Sender {
 	pub id: i32,
 	pub name: String,
 	pub statuses: Vec<TwitchBadge>,
+}
+
+// the channel a message is posted in
+#[derive(Clone)]
+pub struct Channel {
+	pub id: i32,
+	pub name: i32,
 }
 
 // the only info which is important and
@@ -105,7 +113,7 @@ pub struct CommandSource {
 	pub cmd: String,
 	pub args: Vec<String>,
 	pub sender: Sender,
-	pub channel: String,
+	pub channel: Channel,
 	pub timestamp: DateTime<Utc>,
 }
 
@@ -158,7 +166,10 @@ impl CommandSource {
 			cmd: cmd,
 			args: args,
 			sender: sender,
-			channel: privmsg.source.params[0][1..].to_owned(),
+			channel: Channel {
+				name: privmsg.source.params[0][1..].to_owned(),
+				id: privmsg.channel_id.parse::<i32>().unwrap(),
+			},
 			timestamp: privmsg.server_timestamp,
 		}
 	}

@@ -82,7 +82,7 @@ pub async fn handle_command(
 		"giveup"         => give_up_trivia(&cmd, &auth,ongoing_trivia_games_arc).await,
 		"commands"       => echo(&vec![format!("🛠️ {}", config.commands_reference_path)]),
 		"trivia"         => attempt_start_trivia_game(&cmd, &auth, ongoing_trivia_games_arc).await,
-		"rose"           => tag_rand_chatter_with_rose(&cmd.channel, &config.disregarded_users).await,
+		"rose"           => tag_rand_chatter_with_rose(&cmd.channel.name, &config.disregarded_users).await,
 		"bench"          => bench_command(&pool, client.clone(), config, &auth, cache_arc, cmd.clone(), ongoing_trivia_games_arc).await,
 		// special commands
 		"pipe"           => pipe(&pool, client.clone(), config, &auth, cache_arc, &cmd, ongoing_trivia_games_arc).await,
@@ -113,6 +113,7 @@ pub async fn handle_command(
 	};
 	
 	if let Some(output) = cmd_out {
+		// twitch doesn't allow awfully long messages
 		let out = {
 			if output.len() > 500 {
 				(&output[..500]).into()
@@ -121,7 +122,7 @@ pub async fn handle_command(
 			}
 		};
 
-		client.say(cmd.channel, out).await.unwrap();
+		client.say(cmd.channel.name, out).await.unwrap();
 	}
 
 	None
@@ -253,10 +254,10 @@ fn parse_duration_to_hm(s: &String) -> anyhow::Result<(i64, i64)> {
 
 // add a reminder for someone
 async fn add_reminder(
-	pool: &SqlitePool,
-	auth: &TwitchAuth,
-	cache_arc: Arc<Mutex<NameIdCache>>,
-	cmd: &CommandSource,
+	pool:        &SqlitePool,
+	auth:        &TwitchAuth,
+	cache_arc:   Arc<Mutex<NameIdCache>>,
+	cmd:         &CommandSource,
 	is_for_self: bool,
 ) -> anyhow::Result<Option<String>> {
 	if cmd.args.len() == 0 {
@@ -362,7 +363,7 @@ async fn markov(
 	let mut seed: String = cmd.args[0].clone();
 
 	for _ in 0..rounds-1 {
-		let succ = match db::get_rand_markov_succ(pool, &cmd.channel, &seed).await {
+		let succ = match db::get_rand_markov_succ(pool, &cmd.channel.id, &seed).await {
 		Ok(Some(successor)) => successor,
 			Ok(None) => continue,
 			Err(e) => {println!("{e}");break},
@@ -426,12 +427,18 @@ async fn first_message(
 		None => cmd.sender.id,
 	};
 
-	let channel = match &cmd.args.get(1) {
-		Some(c) => c.clone(),
-		None =>    &cmd.channel,
+	let channel_id = match &cmd.args.get(1) {
+		Some(c) => {
+			// TODO: cache
+			match api::id_from_nick(c, &auth).await? {
+				Some(id) => id,
+				None     => return Ok(Some("❌ channel not found".into()))
+			}
+		},
+		None => cmd.channel.id,
 	};
 
-	let message = db::get_first_message(pool, sender_id, channel).await?;
+	let message = db::get_first_message(pool, sender_id, channel_id).await?;
 
 	match message {
 		Some(msg) => return Ok(Some(msg)),
@@ -466,6 +473,7 @@ async fn tag_rand_chatter_with_rose(
 	channel_name:      &str,
 	disregarded_users: &Vec<String>,
 ) -> anyhow::Result<Option<String>> {
+	                          // also takes in channel name so we gucci
 	let chatters = match api::get_chatters(channel_name).await? {
 		Some(chatters) => chatters,
 		None           => return Ok(Some("❌ no users in the chatroom".into())),
@@ -505,12 +513,21 @@ async fn get_uptime(
 	auth: &TwitchAuth,
 	cmd:  &CommandSource,
 ) -> anyhow::Result<Option<String>> {
-	let channel = match &cmd.args.get(0) {
-		Some(a) => a,
+	// the API takes in user name, so no ID
+	// shenanigans are needed here haha monkaLaugh
+	let channel_id = match &cmd.args.get(0) {
+		// TODO: cache
+		Some(nick) => {
+			match api::id_from_nick(nick, auth).await? {
+				Some(id) => id,
+				None     => Ok(Some("❌ channel not found".into()))
+
+			}
+		},
 		None    => &cmd.channel,
 	};
 
-	let info = match api::get_stream_info(auth, &channel).await? {
+	let info = match api::get_stream_info(auth, channel_id).await? {
 		Some(i) => i,
 		None    => return Ok(Some("❌ streamer not live".into())),
 	};
@@ -595,6 +612,8 @@ async fn bench_command(
 	handle_command(pool, client, config, auth, cache_arc, new_cmd, true, ongoing_trivia_games_arc.clone()).await;
 	Ok(Some(format!("📡 {} ms", now.elapsed().as_millis())))
 }
+
+// KONTROLA TADY
 
 // get the time a user has spent in an offline chat
 async fn get_offline_time(
@@ -807,7 +826,7 @@ pub async fn remove_channel_command(
 		None => return Ok(Some("❌ no command name provided".into()))
 	};
 
-	match db::remove_channel_command(pool, &cmd.channel, cmd_name).await? {
+	match db::remove_channel_command(pool, cmd.channel.id, cmd_name).await? {
 		0 => return Ok(Some("❌ no such command existed".into())),
 		_ => return Ok(Some("✅ removed successfully".into())),
 	}
@@ -837,7 +856,7 @@ pub async fn get_word_ratio(
 		Some(
 			format!(
 				"{:.2}% of tracked {user_name}'s messages in this channel contain the word {word}",
-				db::get_word_ratio(pool, &cmd.channel, user_id, word, cmd_prefix).await? * 100.,
+				db::get_word_ratio(pool, cmd.channel.id, user_id, word, cmd_prefix).await? * 100.,
 			)
 		)
 	)
@@ -1044,7 +1063,7 @@ pub async fn attempt_start_trivia_game(
 	twitch_auth:              &TwitchAuth,
 	ongoing_trivia_games_arc: Arc<Mutex<crate::OngoingTriviaGames>>,
 ) -> anyhow::Result<Option<String>, anyhow::Error> {
-	let channel_id = api::id_from_nick(&cmd.channel, twitch_auth).await?.unwrap();
+	let channel_id = cmd.channel.id;
 	
 	let cat = api::TriviaCategory::from_vec(&cmd.args);
 	let dif = api::TriviaDifficulty::from_vec(&cmd.args);
@@ -1069,10 +1088,10 @@ pub async fn give_up_trivia(
 	twitch_auth:              &TwitchAuth,
 	ongoing_trivia_games_arc: Arc<Mutex<crate::OngoingTriviaGames>>,
 ) -> anyhow::Result<Option<String>> {
-	let channel_id = api::id_from_nick(&cmd.channel, twitch_auth).await?.unwrap();
+	let channel_id = cmd.channel.id;
 
 	if let Ok(mut cache) = ongoing_trivia_games_arc.lock() {
-		if let Some(correct_answer) = (*cache).get(&channel_id.to_string()) {
+		if let Some(correct_answer) = (*cache).get(channel_id) {
 			let c = correct_answer.clone();
 			(*cache).remove(&channel_id.to_string());
 			return Ok(Some(format!("So bad LUL | The answer was \'{c}\'")));

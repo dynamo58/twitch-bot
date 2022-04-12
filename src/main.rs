@@ -190,13 +190,13 @@ async fn main() -> anyhow::Result<()> {
 						None => (),
 					}
 
-					// check if user has any reminders set for him
+					// check if user has any reminders set for them
 					let reminders = 
 						db::check_for_reminders(
 							&pool,
 							privmsg.sender.id.parse::<i32>().unwrap(),
 						).await.unwrap();
-	
+
 					if let Some(rs) = reminders {
 						for r in &rs {
 							let from_user = if r.from_user_id == r.for_user_id {
