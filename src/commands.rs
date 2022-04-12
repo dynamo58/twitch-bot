@@ -613,25 +613,26 @@ async fn bench_command(
 	Ok(Some(format!("📡 {} ms", now.elapsed().as_millis())))
 }
 
-// KONTROLA TADY
-
 // get the time a user has spent in an offline chat
 async fn get_offline_time(
 	pool: &SqlitePool,
 	auth: &TwitchAuth,
 	cmd:  &CommandSource,
 ) -> anyhow::Result<Option<String>> {
+	let channel_id:   i32
 	let channel_name: &str;
-	let offliner_id: i32;
+	let offliner_id:  i32;
 	let offliner_name: &str;
 	
 	match cmd.args.len() {
 		0 => {
+			channel_id = cmd.channel.id
 			channel_name = &cmd.channel;
 			offliner_id = cmd.sender.id;
 			offliner_name = &cmd.sender.name;
 		},
 		1 => {
+			channel_id = cmd.channel.id;
 			channel_name = &cmd.channel;
 			offliner_name = &cmd.args[0];
 			offliner_id = match api::id_from_nick(&cmd.args[0], auth).await? {
@@ -640,6 +641,9 @@ async fn get_offline_time(
 			}
 		},
 		_ => {
+			let channel_id = match api::id_from_nick(&cmd.args[1], auth).await? {
+
+			};
 			channel_name = &cmd.args[1];
 			offliner_name = &cmd.args[0];
 			offliner_id = match api::id_from_nick(&cmd.args[0], auth).await? {
