@@ -47,12 +47,12 @@ pub async fn init_db(
 
 // create table for current set channel (if it does not exist)
 pub async fn try_create_tables_for_channel(
-    pool: &SqlitePool,
-    name: &str,
+    pool:       &SqlitePool,
+    channel_id: i32,
 ) -> anyhow::Result<()> {
 	let mut conn = pool.acquire().await?;
 	let sql = include_str!("../assets/sql/channel_tables.sql")
-		.replace("{{ CHANNEL_NAME }}", name);
+		.replace("{{ CHANNEL_ID }}", &channel_id.to_string());
 
 	sqlx::query::<Sqlite>(&sql)
 		.execute(&mut *conn)
@@ -67,15 +67,15 @@ pub async fn log(
     privmsg: &twitch_irc::message::PrivmsgMessage,
 ) -> anyhow::Result<()> {
 	let mut conn = pool.acquire().await?;
-	let channel = &privmsg.source.params[0][1..];
+	let channel_id = privmsg.channel_id.parse::<i32>().unwrap();
 
     let sql = r#"
     INSERT
-        INTO {{ TABLE_NAME }} 
+        INTO CHANNEL_{{ CHANNEL_ID }} 
 	        (sender_id, sender_nick, badges, timestamp, message)
         VALUES
 	        (?1, ?2, ?3, ?4, ?5)
-    "#.replace("{{ TABLE_NAME }}", channel);
+    "#.replace("{{ CHANNEL_ID }}", &channel_id.to_string());
 
 	sqlx::query::<Sqlite>(&sql)
 		.bind(&privmsg.sender.id)
@@ -121,11 +121,11 @@ pub async fn log_markov(
 		if let (Some(w), Some(s)) = (word, succ) {
 			let sql = r#"
 				INSERT 
-					INTO {{ CHANNEL_ID }}_MARKOV
+					INTO CHANNEL_{{ CHANNEL_ID }}_MARKOV
 						(word, succ)
 					VALUES
 						($1, $2);
-			"#.replace("{{ CHANNEL_ID }}", privmsg.channel_id);
+			"#.replace("{{ CHANNEL_ID }}", &privmsg.channel_id);
 				
 			sqlx::query::<Sqlite>(&sql)
 				.bind(w)
@@ -283,11 +283,12 @@ pub async fn get_rand_markov_succ(
 
 	let sql = r#"
 		SELECT succ
-			FROM {{ CHANNEL_ID }}_MARKOV
+			FROM CHANNEL_{{ CHANNEL_ID }}_MARKOV
 			WHERE
 				word=$1
 			COLLATE NOCASE;
-	"#.replace("{{ CHANNEL_ID }}", channel_id);
+	"#.replace("{{ CHANNEL_ID }}", &channel_id.to_string());
+
 
 	let succs: Vec<String> = sqlx::query_as::<Sqlite, StringQR>(&sql)
 		.bind(word)
@@ -507,11 +508,11 @@ pub async fn get_first_message(
 
 	let sql = r#"
 		SELECT message
-			FROM {{ CHANNEL_ID }}
+			FROM CHANNEL_{{ CHANNEL_ID }}
 			WHERE
 				sender_id=$1
 			LIMIT 1;
-	"#.replace("{{ CHANNEL_ID }}", channel_id);
+	"#.replace("{{ CHANNEL_ID }}", &channel_id.to_string());
 
 	let messages: Vec<String> = sqlx::query_as::<Sqlite, StringQR>(&sql)
 		.bind(sender_id)
@@ -632,14 +633,14 @@ pub async fn add_offliner_minute(
 
 	let sql = r#"
     INSERT INTO
-        {{ CHANNEL_ID }}_OFFLINERS
+        CHANNEL_{{ CHANNEL_ID }}_OFFLINERS
 			(offliner_id, time_s)
         VALUES
 	        (?1, 60)
 		ON CONFLICT
 		DO UPDATE
 			SET time_s = time_s + 60
-    "#.replace("{{ CHANNEL_ID }}", channel_id);
+    "#.replace("{{ CHANNEL_ID }}", &channel_id.to_string());
 
 	sqlx::query::<Sqlite>(&sql)
 		.bind(offliner_id)
@@ -660,10 +661,10 @@ pub async fn get_offline_time(
 		SELECT
 			time_s
 		FROM
-			{{ CHANNEL_ID }}_OFFLINERS
+			CHANNEL_{{ CHANNEL_ID }}_OFFLINERS
 		WHERE
 			offliner_id=$1;
-	"#.replace("{{ CHANNEL_ID }}", channel_id);
+	"#.replace("{{ CHANNEL_ID }}", &channel_id.to_string());
 
 	let offliners_secs = sqlx::query_as::<Sqlite, I32QR>(&sql)
 		.bind(offliner_id)
@@ -687,11 +688,11 @@ pub async fn new_cmd(
 
     let sql = r#"
     INSERT OR REPLACE
-        INTO {{ CHANNEL_ID }}_COMMANDS
+        INTO CHANNEL_{{ CHANNEL_ID }}_COMMANDS
 	        (name, type, expression)
         VALUES
 	        (?1, ?2, ?3)
-    "#.replace("{{ CHANNEL_ID }}", channel_id);
+    "#.replace("{{ CHANNEL_ID }}", &channel_id.to_string());
 
 	sqlx::query::<Sqlite>(&sql)
 		.bind(cmd_name)
@@ -711,16 +712,16 @@ pub async fn get_channel_cmd(
 	let mut conn = pool.acquire().await?;
 
 	let sql = r#"
-		UPDATE {{ CHANNEL_ID }}_COMMANDS
+		UPDATE CHANNEL_{{ CHANNEL_ID }}_COMMANDS
 		SET
 			metadata = metadata + 1
 		WHERE
 			name=?1;
 		SELECT type, expression, metadata 
-			FROM {{ CHANNEL_ID }}_COMMANDS
+			FROM CHANNEL_{{ CHANNEL_ID }}_COMMANDS
 			WHERE
 				name=?1
-	"#.replace("{{ CHANNEL_ID }}", channel_id);
+	"#.replace("{{ CHANNEL_ID }}", &channel_id.to_string());
 
 	let cmds: Vec<ChannelCommandQR> = sqlx::query_as::<Sqlite, ChannelCommandQR>(&sql)
 		.bind(cmd_name)
@@ -743,11 +744,11 @@ pub async fn remove_channel_command(
 
 	let sql = r#"
 		DELETE
-			FROM {{ CHANNEL_ID }}_COMMANDS
+			FROM CHANNEL_{{ CHANNEL_ID }}_COMMANDS
 			WHERE
 				name=?1;
 		SELECT changes();
-	"#.replace("{{ CHANNEL_ID }}", channel_id);
+	"#.replace("{{ CHANNEL_ID }}", &channel_id.to_string());
 
 	let num_affected: i32 = sqlx::query_as::<Sqlite, I32QR>(&sql)
 		.bind(cmd_name)
@@ -773,7 +774,7 @@ pub async fn get_word_ratio(
 	// get the count of rows which contain `word`
 	let sql = r#"
 		SELECT COUNT(*)
-			FROM {{ CHANNEL_ID }}
+			FROM CHANNEL_{{ CHANNEL_ID }}
 			WHERE
 				sender_id=?1
 			AND 
@@ -781,7 +782,7 @@ pub async fn get_word_ratio(
 			AND
 				message NOT LIKE '?3%'
 	"#
-		.replace("{{ CHANNEL_ID }}", channel_id)
+		.replace("{{ CHANNEL_ID }}", &channel_id.to_string())
 		// the sqlx templating does not work,
 		// so i am manually replacing it here
 		.replace("?2", word)
@@ -795,13 +796,13 @@ pub async fn get_word_ratio(
 	// get total message count
 	let sql = r#"
 		SELECT COUNT(*)
-			FROM {{ CHANNEL_NAME }}
+			FROM CHANNEL_{{ CHANNEL_ID }}
 		WHERE
 			sender_id=?1
 		AND
 			message NOT LIKE '?2%';
 	"#
-		.replace("{{ CHANNEL_NAME }}", channel_name)
+		.replace("{{ CHANNEL_ID }}", &channel_id.to_string())
 		.replace("?2", &cmd_prefix.to_string());
 
 	total_count = sqlx::query_as::<Sqlite, I32QR>(&sql)

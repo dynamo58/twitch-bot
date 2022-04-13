@@ -61,6 +61,6 @@ INSERT INTO
 		),
 		(
 			"E3",
-			"The very last command of a pipe has to be one of the following: pastebin / lower / upper / stdout"
+			"The very last command of a pipe has to be one of the following: pastebin / lower / upper / stdout / devnull"
 		)
 	ON CONFLICT DO NOTHING;

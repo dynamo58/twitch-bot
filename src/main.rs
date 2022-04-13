@@ -41,17 +41,17 @@ const DB_PATH: &str = "sqlite:db.db";
 async fn main() -> anyhow::Result<()> {
 	// load environment variables from `.env` file
 	dotenv().ok();
-	
+
 
 
 	// load all of the credentials and configurations
 	let config = Config::from_config_file()
 		.expect(&format!("{}   Couldn't load config, aborting.", "ERROR  ".red().bold()));
-	let auth = TwitchAuth::env()
+	let auth = TwitchAuth::from_env()
 		.expect(&format!("{}   Couldn't load Twitch credentials from .env", "ERROR  ".red().bold()));
 
 	println!("{}   Obtained credentials and config from local files", "INFO   ".blue().bold());
-	
+
 
 
 	// this will hold cached names and ids of users
@@ -86,7 +86,15 @@ async fn main() -> anyhow::Result<()> {
 	// create database tables for channels in config
 	// (if they do not already exist)
 	for channel in &config.channels {
-		db::try_create_tables_for_channel(&pool, channel)
+		let channel_id = api::id_from_nick(channel, &auth)
+			.await?
+			.expect(&format!(
+				"{}   Channel \"{}\" wasn't found, aborting",
+				"ERROR  ".red().bold(),
+				channel.bold()
+			));
+
+		db::try_create_tables_for_channel(&pool, channel_id)
 			.await
 			.expect(
 				&format!(

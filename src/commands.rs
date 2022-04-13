@@ -363,7 +363,7 @@ async fn markov(
 	let mut seed: String = cmd.args[0].clone();
 
 	for _ in 0..rounds-1 {
-		let succ = match db::get_rand_markov_succ(pool, &cmd.channel.id, &seed).await {
+		let succ = match db::get_rand_markov_succ(pool, cmd.channel.id, &seed).await {
 		Ok(Some(successor)) => successor,
 			Ok(None) => continue,
 			Err(e) => {println!("{e}");break},
@@ -515,19 +515,13 @@ async fn get_uptime(
 ) -> anyhow::Result<Option<String>> {
 	// the API takes in user name, so no ID
 	// shenanigans are needed here haha monkaLaugh
-	let channel_id = match &cmd.args.get(0) {
+	let channel_name = match cmd.args.get(0) {
 		// TODO: cache
-		Some(nick) => {
-			match api::id_from_nick(nick, auth).await? {
-				Some(id) => id,
-				None     => Ok(Some("❌ channel not found".into()))
-
-			}
-		},
-		None    => &cmd.channel,
+		Some(nick) => nick,
+		None       => &cmd.channel.name,
 	};
 
-	let info = match api::get_stream_info(auth, channel_id).await? {
+	let info = match api::get_stream_info(auth, channel_name).await? {
 		Some(i) => i,
 		None    => return Ok(Some("❌ streamer not live".into())),
 	};
@@ -535,7 +529,7 @@ async fn get_uptime(
 	
 	let formatted = fmt_duration(duration);
 
-	Ok(Some(format!("⏱️ {channel} has been live for {formatted}")))
+	Ok(Some(format!("⏱️ {} has been live for {formatted}", cmd.args[0])))
 }
 
 // the language identifiers
@@ -619,21 +613,21 @@ async fn get_offline_time(
 	auth: &TwitchAuth,
 	cmd:  &CommandSource,
 ) -> anyhow::Result<Option<String>> {
-	let channel_id:   i32
-	let channel_name: &str;
-	let offliner_id:  i32;
+	let channel_id:    i32;
+	let channel_name:  &str;
+	let offliner_id:   i32;
 	let offliner_name: &str;
 	
 	match cmd.args.len() {
 		0 => {
-			channel_id = cmd.channel.id
-			channel_name = &cmd.channel;
+			channel_id = cmd.channel.id;
+			channel_name = &cmd.channel.name;
 			offliner_id = cmd.sender.id;
 			offliner_name = &cmd.sender.name;
 		},
 		1 => {
 			channel_id = cmd.channel.id;
-			channel_name = &cmd.channel;
+			channel_name = &cmd.channel.name;
 			offliner_name = &cmd.args[0];
 			offliner_id = match api::id_from_nick(&cmd.args[0], auth).await? {
 				Some(id) => id,
@@ -641,10 +635,11 @@ async fn get_offline_time(
 			}
 		},
 		_ => {
-			let channel_id = match api::id_from_nick(&cmd.args[1], auth).await? {
-
-			};
 			channel_name = &cmd.args[1];
+			channel_id = match api::id_from_nick(&cmd.args[1], auth).await? {
+				Some(id) => id,
+				None     => return Ok(Some(format!("❌ channel does not exist")))
+			};
 			offliner_name = &cmd.args[0];
 			offliner_id = match api::id_from_nick(&cmd.args[0], auth).await? {
 				Some(id) => id,
@@ -653,7 +648,7 @@ async fn get_offline_time(
 		},
 	};
 
-	let t = db::get_offline_time(pool, channel_name, offliner_id).await?;
+	let t = db::get_offline_time(pool, channel_id, offliner_id).await?;
 	Ok(Some(format!("{offliner_name} has spent {} in {channel_name}'s offline chat!", fmt_duration(t))))
 }
 
@@ -713,14 +708,14 @@ async fn get_followage(
 	twitch_auth: &TwitchAuth,
 ) -> anyhow::Result<Option<String>> {
 	let (channel_name, channel_id) = match cmd.args.len() {
-		0 => (&cmd.channel, api::id_from_nick(&cmd.channel, twitch_auth).await?),
-		1 => (&cmd.channel, api::id_from_nick(&cmd.channel, twitch_auth).await?),
-		_ => (&cmd.args[1], api::id_from_nick(&cmd.args[1], twitch_auth).await?),
-	};
-
-	let channel_id = match channel_id {
-		Some(id) => id,
-		None => return Ok(Some(format!("❌ channel {channel_name} does not exist"))),
+		0 => (&cmd.channel.name, cmd.channel.id),
+		1 => (&cmd.channel.name, cmd.channel.id),
+		_ => {
+			(&cmd.args[1], match api::id_from_nick(&cmd.args[1], twitch_auth).await? {
+				Some(id) => id,
+				None => return Ok(Some(format!("❌ user {} not found", &cmd.args[0])))
+			})
+		}
 	};
 
 	let (user_name, user_id) = match cmd.args.len() {
@@ -783,7 +778,7 @@ async fn new_cmd(
 		None       => return Ok(Some("❌ no expression provided".into())),
 	};
 
-	db::new_cmd(pool, &cmd.channel, cmd_name, cmd_type, &cmd_expr).await?;
+	db::new_cmd(pool, cmd.channel.id, cmd_name, cmd_type, &cmd_expr).await?;
 
 	Ok(Some("🔧 command created successfully".into()))
 }
@@ -794,7 +789,7 @@ pub async fn try_execute_channel_command(
 ) -> anyhow::Result<Option<String>> {
 	let cmd_name = cmd.cmd.as_str();
 
-	let (cmd_type, cmd_expr, cmd_meta) = match db::get_channel_cmd(pool, &cmd.channel, cmd_name).await? {
+	let (cmd_type, cmd_expr, cmd_meta) = match db::get_channel_cmd(pool, cmd.channel.id, cmd_name).await? {
 		Some(cmd) => cmd,
 		None => return Ok(Some("❌ command not recognized".into())),
 	};
@@ -1095,7 +1090,7 @@ pub async fn give_up_trivia(
 	let channel_id = cmd.channel.id;
 
 	if let Ok(mut cache) = ongoing_trivia_games_arc.lock() {
-		if let Some(correct_answer) = (*cache).get(channel_id) {
+		if let Some(correct_answer) = (*cache).get(&channel_id.to_string()) {
 			let c = correct_answer.clone();
 			(*cache).remove(&channel_id.to_string());
 			return Ok(Some(format!("So bad LUL | The answer was \'{c}\'")));

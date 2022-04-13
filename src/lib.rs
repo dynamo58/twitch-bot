@@ -103,7 +103,7 @@ pub struct Sender {
 #[derive(Clone)]
 pub struct Channel {
 	pub id: i32,
-	pub name: i32,
+	pub name: String,
 }
 
 // the only info which is important and

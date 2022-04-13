@@ -1,6 +1,6 @@
 # About
 
-A simple sophisticated Twitch bot in Rust.
+Lovcen (/lôːʋtɕen/) is a sophisticated [Twitch.tv](https://www.twitch.tv) chat bot made in Rust.
 
 ## Underlying technologies
 - Rust
@@ -45,7 +45,7 @@ A simple sophisticated Twitch bot in Rust.
 | urban          | [term: text]                                                               | queries urbandictionary for a phrase                               | None
 | weather        | [location: text]                                                           | get weather report from specified location                         | None
 | wiki           | [phrase: text]                                                             | tries to query Wikipedia for searched topic/title                  | None
-| suggest        | [suggestion: text]                                                         | suggest something to the bot runner                                | None
+| suggest        | [suggestion: text]                                                         | suggest something to the bot maintainer                            | None
 | uptime         | [channel: opt(str)]                                                        | get the uptime of a streamer                                       | None
 | wordratio      | [user: opt(str)] [word: str]                                               | get the ratio of messages of a user that contain certain word      | None
 | time           | [location: text]                                                           | get the local time in the specified location                       | None

@@ -22,30 +22,30 @@ pub async fn check_for_offliners(
 					}
 					count += 1;
 
-					let mut _id: Option<i32> = None;
+					let mut _offliner_id: Option<i32> = None;
+					let mut _channel_id : Option<i32> = None;
 
 					if let Ok(cache) = cache_arc.lock() {
 						match cache.get(offliner) {
-							Some(id) => { _id = Some(*id); },
+							Some(id) => { _offliner_id = Some(*id); },
+							None     => (), 
+						};
+
+						match cache.get(offliner) {
+							Some(id) => { _offliner_id = Some(*id); },
 							None     => (), 
 						};
 					}
 
-					match _id {
-						Some(id) => {
-							db::add_offliner_minute(&pool, channel_name, id).await?;
-						},
-						None     => match api::id_from_nick(offliner, twitch_auth).await? {
-							Some(id) => {
-								if let Ok(mut cache) = cache_arc.lock() {
-									cache.insert(offliner.to_string(), id);
-								}
-								
-								db::add_offliner_minute(&pool, channel_name, id).await?;
-							},
-							None     => { continue },
-						},
+					if let None = _channel_id {
+						_channel_id = Some(api::id_from_nick(channel_name, twitch_auth).await?.unwrap());
 					}
+
+					if let None = _offliner_id {
+						_offliner_id = Some(api::id_from_nick(offliner, twitch_auth).await?.unwrap());
+					}
+
+					db::add_offliner_minute(&pool, _channel_id.unwrap(), _offliner_id.unwrap()).await?;
 				}
 			}
 		}
