@@ -5,6 +5,7 @@ pub mod api_models;
 pub mod background;
 
 use std::{collections::HashMap, fs::read_to_string};
+use std::sync::{Arc, Mutex};
 use std::path::Path;
 
 
@@ -99,6 +100,15 @@ pub struct Sender {
 	pub statuses: Vec<TwitchBadge>,
 }
 
+impl Sender {
+	// checks whether a certain user is either mod/vip/broadcaster 
+	pub fn is_mvb(&self) -> bool {
+		self.statuses.contains(&TwitchBadge::Vip) ||
+		self.statuses.contains(&TwitchBadge::Mod) || 
+		self.statuses.contains(&TwitchBadge::Broadcaster) 
+	}
+}
+
 // the channel a message is posted in
 #[derive(Clone)]
 pub struct Channel {
@@ -173,6 +183,116 @@ impl CommandSource {
 			timestamp: privmsg.server_timestamp,
 		}
 	}
+
+	// get the channel id, channel name, user id and user name
+	// from by infering the command target
+	pub async fn user_channel_info_from_args(
+		&self,
+		twitch_auth:       &TwitchAuth,
+		name_id_cache_arc: Arc<Mutex<NameIdCache>>
+	) -> Result<(Channel, Channel), UserChannelParseError> {
+		match self.args.len() {
+			// if 0 args are supplied:
+			//     the command sender is the target user,
+			//     the channel from which command is ran is the target channel
+			0 => {
+				let user = Channel {
+					name: self.sender.name.clone(),
+					id:   self.sender.id,
+				};
+
+				let channel = self.channel.clone();
+
+				Ok((user, channel))
+			},
+
+			// if 1 arg is supplied:
+			//     the first arg is the target user,
+			//     the channel from which command is ran is the target channel
+			1 => {
+				let user_name = self.args[0].clone();
+				let mut user_id: Option<i32> = None;
+
+				if let Ok(cache) = name_id_cache_arc.lock() {
+					match cache.get(&user_name) {
+						Some(id) => { user_id = Some(*id); },
+						None     => (), 
+					};
+				}
+
+				if let None = user_id {
+					user_id = Some(api::id_from_nick(&user_name, &twitch_auth)
+						.await.ok().ok_or(UserChannelParseError::Unknown)?
+						.ok_or(UserChannelParseError::UserNotFound(user_name.clone()))?); 
+				}
+				
+				let user = Channel {
+					name: user_name,
+					id:   user_id.unwrap(),
+				};
+				let channel = self.channel.clone();
+
+				Ok((user, channel))
+			}
+
+			// if 2 (or more) args are supplied:
+			//     the first arg is the target user
+			//     the second arg is the target channel
+			_ => {
+				let user_name = self.args[0].clone();
+				let mut user_id: Option<i32> = None;
+				
+				let channel_name = self.args[1].clone();
+				let mut channel_id: Option<i32> = None;
+				
+				if let Ok(cache) = name_id_cache_arc.lock() {
+					match cache.get(&user_name) {
+						Some(id) => { user_id = Some(*id); },
+						None     => (), 
+					}
+
+					match cache.get(&channel_name) {
+						Some(id) => { channel_id = Some(*id); },
+						None     => (), 
+					}
+				}
+				
+				if let None = user_id {
+					user_id = Some(api::id_from_nick(&user_name, &twitch_auth)
+						.await.ok().ok_or(UserChannelParseError::Unknown)?
+						.ok_or(UserChannelParseError::UserNotFound(user_name.clone()))?);
+				}
+
+				if let None = channel_id {
+					channel_id = Some(api::id_from_nick(&channel_name, &twitch_auth)
+						.await.ok().ok_or(UserChannelParseError::Unknown)?
+						.ok_or(UserChannelParseError::ChannelNotFound(channel_name.clone()))?);
+				}
+
+				let user = Channel {
+					id:   user_id.unwrap(),
+					name: user_name,
+				};
+
+				let channel = Channel {
+					id: channel_id.unwrap(),
+					name: channel_name,
+				};
+
+				Ok((user, channel))
+			},
+		}
+	}
+}
+
+#[derive(Debug, Error)]
+pub enum UserChannelParseError {
+	#[error("💢 User `{0}` was not found")]
+	UserNotFound(String),
+	#[error("💢 Channel `{0}` was not found")]
+	ChannelNotFound(String),
+	#[error("💢 Unknown error has occured")]
+    Unknown,
 }
 
 // Is used to cache the emotes of the channel

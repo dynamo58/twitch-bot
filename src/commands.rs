@@ -38,9 +38,8 @@ pub async fn handle_command(
 	is_pipe:    bool,
 	ongoing_trivia_games_arc: Arc<Mutex<crate::OngoingTriviaGames>>,
 ) -> Option<String> {
-	let cache_arc2 = cache_arc.clone();
-	if let Ok(mut cache) = cache_arc2.lock() {
-		cache.insert(cmd.sender.name.to_owned(), cmd.sender.id);
+	if let Ok(mut cache) = cache_arc.clone().lock() {
+		cache.insert(cmd.sender.name.clone(), cmd.sender.id);
 	}
 
 	let now = Instant::now();
@@ -49,38 +48,37 @@ pub async fn handle_command(
 		// standard commands
 		"ping"           => ping(),
 		"decide"         => decide(&cmd),
+		"echo"           => echo(&cmd.args),
+		"say"            => echo(&cmd.args),
 		"time"           => get_time(&cmd).await,
-		// "translate"      => translate(&cmd).await,
 		"markov"         => markov(&pool, &cmd).await,
 		"newcmd"         => new_cmd(&pool, &cmd).await,
 		"suggest"        => suggest(&pool, &cmd).await,
 		"reddit"         => get_reddit_post(&cmd).await,
 		"wiki"           => query_wikipedia(&cmd).await,
-		"echo"           => echo(&cmd.args),
-		"say"            => echo(&cmd.args),
 		"define"         => query_dictionary(&cmd).await,
 		"setalias"       => set_alias(&pool, &cmd).await,
-		"uptime"         => get_uptime(&auth, &cmd).await,
-		"accage"         => get_accage(&auth, &cmd).await,
 		"rmalias"        => remove_alias(&pool, &cmd).await,
-		"followage"      => get_followage(&cmd, &auth).await,
 		"urban"          => query_urban_dictionary(&cmd).await,
 		"lurk"           => set_lurk_status(&pool, &cmd).await,
 		"explain"        => explain(&pool, &cmd.args[0]).await,
 		"weather"        => get_weather_report(&cmd.args).await,
+		"uptime"         => get_uptime(&auth, &cmd, cache_arc).await,
+		"accage"         => get_accage(&auth, &cmd, cache_arc).await,
 		"delcmd"         => remove_channel_command(&pool, &cmd).await,
-		"offlinetime"    => get_offline_time(&pool, &auth, &cmd).await,
+		"followage"      => get_followage(&cmd, &auth, cache_arc).await,
 		"clearreminders" => clear_reminders(&pool, cmd.sender.id).await,
 		"rmrm"           => clear_reminders(&pool, cmd.sender.id).await,
 		"first"          => first_message(&pool, &auth, cache_arc, &cmd).await,
 		"bible"          => get_rand_holy_book_verse(api::HolyBook::Bible).await,
 		"quran"          => get_rand_holy_book_verse(api::HolyBook::Quran).await,
+		"offlinetime"    => get_offline_time(&pool, &auth, &cmd, cache_arc).await,
 		"tanakh"         => get_rand_holy_book_verse(api::HolyBook::Tanakh).await,
 		"remindme"       => add_reminder(&pool, &auth, cache_arc, &cmd, true).await,
-		"wordratio"      => get_word_ratio(&pool, &auth, &cmd, config.prefix).await,
 		"remind"         => add_reminder(&pool, &auth, cache_arc, &cmd, false).await,
 		"giveup"         => give_up_trivia(&cmd, &auth,ongoing_trivia_games_arc).await,
 		"commands"       => echo(&vec![format!("🛠️ {}", config.commands_reference_path)]),
+		"wordratio"      => get_word_ratio(&pool, &auth, &cmd, config.prefix, cache_arc).await,
 		"trivia"         => attempt_start_trivia_game(&cmd, &auth, ongoing_trivia_games_arc).await,
 		"rose"           => tag_rand_chatter_with_rose(&cmd.channel.name, &config.disregarded_users).await,
 		"bench"          => bench_command(&pool, client.clone(), config, &auth, cache_arc, cmd.clone(), ongoing_trivia_games_arc).await,
@@ -142,23 +140,24 @@ fn echo(args: &Vec<String>)
 
 // get age of specified account (or called)
 async fn get_accage(
-	auth: &TwitchAuth,
-	cmd: &CommandSource, 
+	twitch_auth: &TwitchAuth,
+	cmd:         &CommandSource,
+	name_id_cache_arc: Arc<Mutex<NameIdCache>>,
 ) -> anyhow::Result<Option<String>> {
-	let user_name = match cmd.args.get(0) {
-		Some(nick) => &nick,
-		None       => &cmd.sender.name
+	let (user, _) = match cmd.user_channel_info_from_args(twitch_auth, name_id_cache_arc).await {
+		Ok(a) => a,
+		Err(e) => return Ok(Some(e.to_string())),
 	};
 
-	match api::get_acc_creation_date(user_name, auth).await? {
+	match api::get_acc_creation_date(&user.name, twitch_auth).await? {
 		Some(date) => {
 			let duration = (Utc::now() - date).num_days();
 			let years = duration as f32 / 365.24;
 
 			if years > 0.5 {
-				return Ok(Some(format!("⏱️ {user_name}'s account is {:.2} years old", years)));
+				return Ok(Some(format!("⏱️ {}'s account is {:.2} years old", user.name, years)));
 			} else {
-				return Ok(Some(format!("⏱️ {user_name}'s account is {duration} days old")));
+				return Ok(Some(format!("⏱️ {}'s account is {duration} days old", user.name)));
 			}
 		},
 		None       => return Ok(Some("❌ user not found".into())),
@@ -355,6 +354,7 @@ async fn markov(
 		}
 	}
 
+	// clamp the number of rounds to be <= 100
 	let rounds = {
 		if rounds > 100 { 100 } else { rounds }
 	};
@@ -385,7 +385,6 @@ async fn explain (
 	pool: &SqlitePool,
 	error_code: &str,
 ) -> anyhow::Result<Option<String>> {
-
 	match db::get_explanation(pool, error_code).await? {
 		Some(expl) => return Ok(Some(expl)),
 		None => return Ok(Some("❌ no such explanation".into()))
@@ -394,51 +393,16 @@ async fn explain (
 
 // returns the first (logged) message of a user
 async fn first_message(
-	pool:      &SqlitePool,
-	auth:      &TwitchAuth,
-	cache_arc: Arc<Mutex<NameIdCache>>,
-	cmd:       &CommandSource,
+	pool:              &SqlitePool,
+	twitch_auth:       &TwitchAuth,
+	name_id_cache_arc: Arc<Mutex<NameIdCache>>,
+	cmd:               &CommandSource,
 ) -> anyhow::Result<Option<String>> {
-	let sender_id = match &cmd.args.get(0) {
-		Some(name) => {
-			let mut _id: Option<i32> = None;
-
-			if let Ok(cache) = cache_arc.lock() {
-				match cache.get(*name) {
-					Some(id) => { _id = Some(*id); },
-					None     => (), 
-				};
-			}
-
-			match _id {
-				Some(id) => id,
-				None     => match api::id_from_nick(name, auth).await? {
-					Some(id) => {
-						if let Ok(mut cache) = cache_arc.lock() {
-							cache.insert(name.to_string(), id);
-						}
-						
-						id
-					},
-					None     => return Ok(Some(format!("user {} nonexistant", name))),
-				},
-			}
-		},
-		None => cmd.sender.id,
+	let (user, channel) = match cmd.user_channel_info_from_args(twitch_auth, name_id_cache_arc).await {
+		Ok(a) => a,
+		Err(e) => return Ok(Some(e.to_string())),
 	};
-
-	let channel_id = match &cmd.args.get(1) {
-		Some(c) => {
-			// TODO: cache
-			match api::id_from_nick(c, &auth).await? {
-				Some(id) => id,
-				None     => return Ok(Some("❌ channel not found".into()))
-			}
-		},
-		None => cmd.channel.id,
-	};
-
-	let message = db::get_first_message(pool, sender_id, channel_id).await?;
+	let message = db::get_first_message(pool, user.id, channel.id).await?;
 
 	match message {
 		Some(msg) => return Ok(Some(msg)),
@@ -473,7 +437,6 @@ async fn tag_rand_chatter_with_rose(
 	channel_name:      &str,
 	disregarded_users: &Vec<String>,
 ) -> anyhow::Result<Option<String>> {
-	                          // also takes in channel name so we gucci
 	let chatters = match api::get_chatters(channel_name).await? {
 		Some(chatters) => chatters,
 		None           => return Ok(Some("❌ no users in the chatroom".into())),
@@ -510,13 +473,11 @@ async fn get_weather_report(
 
 // get uptime of a stream
 async fn get_uptime(
-	auth: &TwitchAuth,
-	cmd:  &CommandSource,
+	auth:              &TwitchAuth,
+	cmd:               &CommandSource,
+	name_id_cache_arc: Arc<Mutex<NameIdCache>>,
 ) -> anyhow::Result<Option<String>> {
-	// the API takes in user name, so no ID
-	// shenanigans are needed here haha monkaLaugh
 	let channel_name = match cmd.args.get(0) {
-		// TODO: cache
 		Some(nick) => nick,
 		None       => &cmd.channel.name,
 	};
@@ -540,28 +501,6 @@ fn parse_langs(s: &String) -> anyhow::Result<(&str, &str)> {
 		&s[s.find(',').ok_or(MyError::NotFound)?+1..s.find(')').ok_or(MyError::NotFound)?],
 	))
 } 
-
-// translate a phrase
-// async fn translate(
-// 	cmd: &CommandSource,
-// ) -> anyhow::Result<Option<String>> {
-// 	let langs = match cmd.args.get(0) {
-// 		Some(l) => l,
-// 		None    => return Ok(Some("❌ insufficient args".into())),
-// 	};
-
-// 	let text = match &cmd.args.get(1) {
-// 		Some(_) => cmd.args[1..].join(" "),
-// 		None    => return Ok(Some("❌ insufficient args".into())),
-// 	};
-
-// 	let (src_lang, target_lang) = match parse_langs(langs) {
-// 		Ok(ls) => ls,
-// 		Err(_) => return Ok(Some("❌ bad formatting".into())),
-// 	};
-
-// 	Ok(Some(api::translate(src_lang, target_lang, &text).await?))
-// }
 
 // go into AFK state
 async fn set_lurk_status(
@@ -610,46 +549,17 @@ async fn bench_command(
 // get the time a user has spent in an offline chat
 async fn get_offline_time(
 	pool: &SqlitePool,
-	auth: &TwitchAuth,
+	twitch_auth: &TwitchAuth,
 	cmd:  &CommandSource,
+	name_id_cache_arc: Arc<Mutex<NameIdCache>>,
 ) -> anyhow::Result<Option<String>> {
-	let channel_id:    i32;
-	let channel_name:  &str;
-	let offliner_id:   i32;
-	let offliner_name: &str;
-	
-	match cmd.args.len() {
-		0 => {
-			channel_id = cmd.channel.id;
-			channel_name = &cmd.channel.name;
-			offliner_id = cmd.sender.id;
-			offliner_name = &cmd.sender.name;
-		},
-		1 => {
-			channel_id = cmd.channel.id;
-			channel_name = &cmd.channel.name;
-			offliner_name = &cmd.args[0];
-			offliner_id = match api::id_from_nick(&cmd.args[0], auth).await? {
-				Some(id) => id,
-				None     => return Ok(Some(format!("❌ user {offliner_name} does not exist")))
-			}
-		},
-		_ => {
-			channel_name = &cmd.args[1];
-			channel_id = match api::id_from_nick(&cmd.args[1], auth).await? {
-				Some(id) => id,
-				None     => return Ok(Some(format!("❌ channel does not exist")))
-			};
-			offliner_name = &cmd.args[0];
-			offliner_id = match api::id_from_nick(&cmd.args[0], auth).await? {
-				Some(id) => id,
-				None     => return Ok(Some(format!("❌ user {offliner_name} does not exist")))
-			}
-		},
+	let (user, channel) = match cmd.user_channel_info_from_args(twitch_auth, name_id_cache_arc).await {
+		Ok(a) => a,
+		Err(e) => return Ok(Some(e.to_string())),
 	};
 
-	let t = db::get_offline_time(pool, channel_id, offliner_id).await?;
-	Ok(Some(format!("{offliner_name} has spent {} in {channel_name}'s offline chat!", fmt_duration(t))))
+	let t = db::get_offline_time(pool, channel.id, user.id).await?;
+	Ok(Some(format!("{} has spent {} in {}'s offline chat!", user.name, channel.name, fmt_duration(t))))
 }
 
 // get the abstract from a wikipedia page
@@ -706,40 +616,25 @@ async fn query_urban_dictionary(
 async fn get_followage(
 	cmd:         &CommandSource,
 	twitch_auth: &TwitchAuth,
+	name_id_cache_arc: Arc<Mutex<NameIdCache>>,
 ) -> anyhow::Result<Option<String>> {
-	let (channel_name, channel_id) = match cmd.args.len() {
-		0 => (&cmd.channel.name, cmd.channel.id),
-		1 => (&cmd.channel.name, cmd.channel.id),
-		_ => {
-			(&cmd.args[1], match api::id_from_nick(&cmd.args[1], twitch_auth).await? {
-				Some(id) => id,
-				None => return Ok(Some(format!("❌ user {} not found", &cmd.args[0])))
-			})
-		}
+	let (user, channel) = match cmd.user_channel_info_from_args(twitch_auth, name_id_cache_arc).await {
+		Ok(a) => a,
+		Err(e) => return Ok(Some(e.to_string())),
 	};
 
-	let (user_name, user_id) = match cmd.args.len() {
-		0 => (&cmd.sender.name, Some(cmd.sender.id)),
-		_ => (&cmd.args[0], api::id_from_nick(&cmd.args[0], twitch_auth).await?),
-	};
-
-	let user_id = match user_id {
-		Some(id) => id,
-		None => return Ok(Some(format!("❌ user {user_name} does not exist"))),
-	}; 
-
-	match api::get_followage(twitch_auth, channel_id, user_id).await? {
+	match api::get_followage(twitch_auth, channel.id, user.id).await? {
 		Some(date) => {
 			let duration = (Utc::now() - date).num_days();
 			let years = duration as f32 / 365.24;
 
 			if years > 0.5 {
-				return Ok(Some(format!("⏱️ {user_name} has been following {channel_name} for {years:.2} years")));
+				return Ok(Some(format!("⏱️ {} has been following {} for {years:.2} years", user.name, channel.name)));
 			} else {
-				return Ok(Some(format!("⏱️ {user_name} has been following {channel_name} for {duration} days")));
+				return Ok(Some(format!("⏱️ {} has been following {} for {duration} days", user.name, channel.name)));
 			}
 		},
-		None       => return Ok(Some(format!("❌ {user_name} does not follow {channel_name}"))),
+		None       => return Ok(Some(format!("❌ {} does not follow {}", user.name, channel.name))),
 	}
 }
 
@@ -836,6 +731,7 @@ pub async fn get_word_ratio(
 	auth:   &TwitchAuth,
 	cmd:    &CommandSource,
 	cmd_prefix: char,
+	name_id_cache_arc: Arc<Mutex<NameIdCache>>,
 ) -> anyhow::Result<Option<String>> {
 	let (user_name, user_id, word) = match cmd.args.len() {
 		0 => return Ok(Some("❌ no word provided".into())),
@@ -895,6 +791,10 @@ async fn pipe(
 	cmd:       &CommandSource,
 	ongoing_trivia_games_arc: Arc<Mutex<crate::OngoingTriviaGames>>,
 ) -> anyhow::Result<Option<String>> {
+	// the command is supposed to be of the form
+	// $pipe <command1 + command1 args> | <command2 + command3 args> | ...
+	// therefore we parse the command into each individual commands and
+	// execute them one by one
 	let commands: Vec<String> = cmd.args
 		.join(" ")
 		.split("|")
@@ -907,17 +807,6 @@ async fn pipe(
 
 	let mut temp_output = String::new();
 	for i in 0..commands.len() {
-	
-		match commands[i].to_lowercase().as_str() {
-			"pastebin"  => { temp_output = api::upload_to_pastebin(&temp_output).await?; continue },
-			"lower"     => { temp_output = temp_output.to_lowercase()                  ; continue },
-			"upper"     => { temp_output = temp_output.to_uppercase()                  ; continue },
-			"stdout"    => { temp_output = temp_output                                 ; continue },
-			"/dev/null" => { temp_output = "".to_string()                              ; continue },
-			"devnull"   => { temp_output = "".to_owned()                               ; continue },
-			_           => (),
-		}
-
 		let trimmed_cmd: Vec<String> = commands[i]
 			.trim()
 			.to_string()
@@ -938,6 +827,18 @@ async fn pipe(
 			sender:    cmd.sender.clone(),
 			timestamp: cmd.timestamp.clone(),
 		};
+
+		// these are some special ad hoc commands
+		// that may only be used in pipes
+		match commands[i].as_str() {
+			"pastebin"  => { temp_output = api::upload_to_pastebin(&temp_output).await?; continue },
+			"lower"     => { temp_output = temp_output.to_lowercase()                  ; continue },
+			"upper"     => { temp_output = temp_output.to_uppercase()                  ; continue },
+			"stdout"    => { temp_output = temp_output                                 ; continue },
+			"/dev/null" => { temp_output = "".to_string()                              ; continue },
+			"devnull"   => { temp_output = "".to_owned()                               ; continue },
+			_           => (),
+		}
 
 		if let Some(output) = handle_command(pool, client.clone(), config, auth, cache_arc.clone(), new_cmd, true, ongoing_trivia_games_arc.clone()).await {
 			temp_output = output;
