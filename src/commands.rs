@@ -10,7 +10,7 @@ use crate::{
 	NameIdCache,
 	Config,
 	fmt_duration,
-	convert_html_entities,
+	convert_from_html_entities,
 };
 
 use std::sync::{Arc, Mutex};
@@ -50,6 +50,8 @@ pub async fn handle_command(
 		"decide"         => decide(&cmd),
 		"echo"           => echo(&cmd.args),
 		"say"            => echo(&cmd.args),
+		"math"           => query(&cmd).await,
+		"query"          => query(&cmd).await,
 		"time"           => get_time(&cmd).await,
 		"markov"         => markov(&pool, &cmd).await,
 		"newcmd"         => new_cmd(&pool, &cmd).await,
@@ -837,6 +839,7 @@ async fn pipe(
 			"stdout"    => { temp_output = temp_output                                 ; continue },
 			"/dev/null" => { temp_output = "".to_string()                              ; continue },
 			"devnull"   => { temp_output = "".to_owned()                               ; continue },
+			"pm"        => { temp_output = format!("/w {} {temp_output}", cmd.sender.name); continue },
 			_           => (),
 		}
 
@@ -941,6 +944,7 @@ pub async fn get_time(
 	}
 }
 
+// get a random verse from the Quran / the Bible / the Tanakh
 pub async fn get_rand_holy_book_verse(
 	book_kind: api::HolyBook,
 ) -> anyhow::Result<Option<String>> {
@@ -976,13 +980,14 @@ pub async fn attempt_start_trivia_game(
 			return Ok(Some("❌ there is currently a game going on!".into()));
 		}
 
-		(*cache).insert(channel_id.to_string(), convert_html_entities(question.correct_answer));
-		return Ok(Some(format!("{}", convert_html_entities(question.question))));
+		(*cache).insert(channel_id.to_string(), convert_from_html_entities(question.correct_answer));
+		return Ok(Some(format!("{}", convert_from_html_entities(question.question))));
 	} else {
 		return Ok(Some("An internal error has occured".into()));
 	}
 }
 
+// if there is a game going on in the chatroom, give it up
 pub async fn give_up_trivia(
 	cmd:                      &CommandSource,
 	twitch_auth:              &TwitchAuth,
@@ -1001,4 +1006,21 @@ pub async fn give_up_trivia(
 	}
 	
 	return Ok(Some("An internal error has occured".into()));
+}
+
+// get an answer to "any" question
+pub async fn query(
+	cmd: &CommandSource,
+) -> anyhow::Result<Option<String>> {
+	let query = match cmd.args.len() {
+		0 => return Ok(Some("❌ no query in command arguments".into())),
+		_ => cmd.args.join(" "),
+	};
+
+	let result = match api::query_generic(&query).await? {
+		Some(s) => s,
+		None    => return Ok(Some("❌ no answer could be found".into())),
+	};
+
+	Ok(Some(result))
 }

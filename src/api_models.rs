@@ -427,3 +427,30 @@ pub struct TriviaQuestion {
     #[serde(rename = "incorrect_answers")]
     pub incorrect_answers: Vec<String>,
 }
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WolframAlphaResponse {
+    pub queryresult: Queryresult,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Queryresult {
+    pub success: bool,
+    pub error: bool,
+    pub pods: Option<Vec<Pod>>,
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Pod {
+    pub subpods: Option<Vec<Subpod>>,
+    pub primary: Option<bool>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Subpod {
+    pub plaintext: String,
+}

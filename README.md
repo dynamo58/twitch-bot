@@ -28,10 +28,12 @@ Lovcen (/lôːʋtɕen/) is a sophisticated [Twitch.tv](https://www.twitch.tv) ch
 | giveup         | None                                                                       | give up the current trivia question                                | None
 | lurk           | None                                                                       | go into lurk mode (gets removed upon next message)                 | None
 | markov         | [start: str] [count: int]                                                  | responds with a markov chain generated from saved chat messages    | None
+| math           | [expression: text]                                                         | alias for the `query` command                                      | None
 | newcmd         | [type: templ\|paste\|incr] [expression: str]                               | create a new channel command                                       | Broadcaster/Moderator/VIP
 | delcmd         | [name: str]                                                                | delete a channel command                                           | Broadcaster/Moderator/VIP
 | offlinetime    | [name: opt(str)]                                                           | returns the time a user has thus far spent in offline chat         | None
 | ping           | None                                                                       | responds with "pong"                                               | None
+| query          | [query: text]                                                              | query WolframAlpha for some question/equation/we                   | None
 | quran          | None                                                                       | get a random verse from the quran                                  | None
 | reddit         | [r/: str] opt(random/upvotes) opt(media) opt(hour/day/week/month/year/all) | get a post from reddit                                             | None
 | remind         | (xh,xm) [user: str] [text]                                                 | reminds user when he types if spec. amouunt of time has passed     | None
@@ -49,7 +51,6 @@ Lovcen (/lôːʋtɕen/) is a sophisticated [Twitch.tv](https://www.twitch.tv) ch
 | uptime         | [channel: opt(str)]                                                        | get the uptime of a streamer                                       | None
 | wordratio      | [user: opt(str)] [word: str]                                               | get the ratio of messages of a user that contain certain word      | None
 | time           | [location: text]                                                           | get the local time in the specified location                       | None
-<!-- | translate      | (from,to) [text]                     | translate some text |  -->
 | trivia         | opt(hard/easy/medium) opt(...category) opt(multiple/true false)            | start a trivia game (anyone in the chat can answer)                | None
 
 

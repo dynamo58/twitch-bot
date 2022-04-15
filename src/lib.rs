@@ -402,7 +402,7 @@ pub type NameIdCache = HashMap<String, i32>;
 
 
 // converts html entities to actual chars (only some selected ones, not all!!) 
-pub fn convert_html_entities(s: String) -> String {
+pub fn convert_from_html_entities(s: String) -> String {
     s
         .replace("&nbsp;", " ")
         .replace("&#039;", "'")
@@ -412,6 +412,47 @@ pub fn convert_html_entities(s: String) -> String {
 		.replace("&rsquo;", "’")
 		.replace("&hellip;", "…")
 		.replace("&rdquo;", "”")
+}
+
+pub fn convert_to_html_encoding(s: String) -> String {
+	s
+		.replace("%",  "%25") // this one has to be always first!
+		.replace(" ",  "%20")
+		.replace("&",  "%26")
+		.replace("'",  "%27")
+		.replace("(",  "%28")
+		.replace(")",  "%29")
+        .replace("/",  "%2F")
+		.replace("*",  "%2A")
+		.replace("+",  "%2B")
+		.replace(",",  "%2C")
+		.replace("-",  "%2D")
+		.replace(".",  "%2E")
+		.replace("/",  "%2F")
+		.replace(":",  "%3A")
+		.replace("<",  "%3C")
+		.replace("=",  "%3D")
+		.replace(">",  "%3E")
+		.replace("?",  "%3F")
+		.replace("@",  "%40")
+		.replace("[",  "%5B")
+		.replace("\\", "%5C")
+		.replace("]",  "%5D")
+		.replace("^",  "%5E")
+		.replace("_",  "%5F")
+		.replace("`",  "%60")
+		.replace("{",  "%7B")
+		.replace("|",  "%7C")
+		.replace("}",  "%7D")
+		.replace("~",  "%7E")
+		.replace("€",  "%E2%82%AC")
+		.replace("‚",  "%E2%80%9A")
+		.replace("„",  "%E2%80%9E")
+		.replace("ˆ",  "%CB%86")
+		.replace("‘",  "%E2%80%98")
+		.replace("’",  "%E2%80%99")
+		.replace("“",  "%E2%80%9C")
+		.replace("”",  "%E2%80%9D")
 }
 
 pub type OngoingTriviaGames = HashMap<String, String>; 

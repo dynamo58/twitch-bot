@@ -894,3 +894,42 @@ pub async fn fetch_trivia_question(
 
     Ok(parsed.results[0].clone())
 }
+
+pub async fn query_generic(
+    query: &str,
+) -> anyhow::Result<Option<String>> {
+    let client = Client::new();
+
+    let formatted_query = crate::convert_to_html_encoding(query.to_owned());
+    let appid = &std::env::var("WOLFRAMALPHA_APPID")?[..];
+    println!("http://api.wolframalpha.com/v2/query?input={formatted_query}&appid={appid}&output=json");
+
+    let res = client
+        .get(&format!("http://api.wolframalpha.com/v2/query?input={formatted_query}&appid={appid}&output=json"))
+        .send()
+        .await?
+        .text()
+        .await?;
+    
+    let parsed: models::WolframAlphaResponse = serde_json::from_str(&res)?;
+
+    if let Some(pods) = parsed.queryresult.pods {
+        let main_pod: Vec<models::Pod> = pods
+            // .clone()
+            .into_iter()    
+            .filter(|p| p.primary == Some(true))
+            .collect();
+        
+        if main_pod.len() == 0 {
+            return Ok(None);
+        }
+         
+        if let Some(subpods) = &main_pod[0].subpods {
+            let answer = subpods[0].plaintext.clone();
+            println!("{answer}");
+            return Ok(Some(answer));
+        }
+    } 
+
+    Ok(None)
+}

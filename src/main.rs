@@ -14,7 +14,8 @@ use twitch_bot::{
 	NameIdCache,
 	EmoteCache,
 	OngoingTriviaGames,
-	convert_html_entities,
+	convert_from_html_entities,
+	convert_to_html_encoding,
 };
 use background as bg;
 use commands::handle_command;
