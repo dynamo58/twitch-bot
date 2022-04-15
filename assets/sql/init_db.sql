@@ -49,7 +49,7 @@ INSERT INTO
 	VALUES
 		(
 			"E0",
-			"The command you called generated an error and couldn't be processed. This is most likely due to an internal server error or a possible unhandled exception."
+			"The command you called generated an error and couldn't be processed, most likely due to an internal server error. If you believe that should not have happened, please contact me with the `suggest` command."
 		),
 		(
 			"E1",
@@ -62,5 +62,9 @@ INSERT INTO
 		(
 			"E3",
 			"The very last command of a pipe has to be one of the following: pastebin / lower / upper / stdout / devnull"
+		),
+		(
+			"E4",
+			"To execute this command, one has to be either moderator, vip or broadcaster of the channel the command is being ran from"
 		)
 	ON CONFLICT DO NOTHING;

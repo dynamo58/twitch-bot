@@ -47,9 +47,8 @@ pub async fn handle_command(
 	let cmd_out = match cmd.cmd.as_str() {
 		// standard commands
 		"ping"           => ping(),
+		"echo"           => echo(&cmd),
 		"decide"         => decide(&cmd),
-		"echo"           => echo(&cmd.args),
-		"say"            => echo(&cmd.args),
 		"math"           => query(&cmd).await,
 		"query"          => query(&cmd).await,
 		"time"           => get_time(&cmd).await,
@@ -74,12 +73,12 @@ pub async fn handle_command(
 		"first"          => first_message(&pool, &auth, cache_arc, &cmd).await,
 		"bible"          => get_rand_holy_book_verse(api::HolyBook::Bible).await,
 		"quran"          => get_rand_holy_book_verse(api::HolyBook::Quran).await,
-		"offlinetime"    => get_offline_time(&pool, &auth, &cmd, cache_arc).await,
 		"tanakh"         => get_rand_holy_book_verse(api::HolyBook::Tanakh).await,
+		"offlinetime"    => get_offline_time(&pool, &auth, &cmd, cache_arc).await,
 		"remindme"       => add_reminder(&pool, &auth, cache_arc, &cmd, true).await,
 		"remind"         => add_reminder(&pool, &auth, cache_arc, &cmd, false).await,
 		"giveup"         => give_up_trivia(&cmd, &auth,ongoing_trivia_games_arc).await,
-		"commands"       => echo(&vec![format!("🛠️ {}", config.commands_reference_path)]),
+		"commands"       => Ok(Some(format!("🛠️ {}", config.commands_reference_path))),
 		"wordratio"      => get_word_ratio(&pool, &auth, &cmd, config.prefix, cache_arc).await,
 		"trivia"         => attempt_start_trivia_game(&cmd, &auth, ongoing_trivia_games_arc).await,
 		"rose"           => tag_rand_chatter_with_rose(&cmd.channel.name, &config.disregarded_users).await,
@@ -113,7 +112,7 @@ pub async fn handle_command(
 	};
 	
 	if let Some(output) = cmd_out {
-		// twitch doesn't allow awfully long messages
+		// twitch generally doesn't allow awfully long messages
 		let out = {
 			if output.len() > 500 {
 				(&output[..500]).into()
@@ -135,9 +134,14 @@ fn ping()
 }
 
 // say whatever caller said
-fn echo(args: &Vec<String>)
--> anyhow::Result<Option<String>> {
-	Ok(Some(args.join(" ")))
+fn echo(
+	cmd: &CommandSource,
+) -> anyhow::Result<Option<String>> {
+	if cmd.sender.is_mvb() {
+		Ok(Some(cmd.args.join(" ")))
+	} else {
+		Ok(Some("❌ requires MVB privileges | E4".into()))
+	}
 }
 
 // get age of specified account (or called)
@@ -154,7 +158,7 @@ async fn get_accage(
 	match api::get_acc_creation_date(&user.name, twitch_auth).await? {
 		Some(date) => {
 			let duration = (Utc::now() - date).num_days();
-			let years = duration as f32 / 365.24;
+			let years = duration as f32 / 365.2425;
 
 			if years > 0.5 {
 				return Ok(Some(format!("⏱️ {}'s account is {:.2} years old", user.name, years)));
@@ -628,7 +632,7 @@ async fn get_followage(
 	match api::get_followage(twitch_auth, channel.id, user.id).await? {
 		Some(date) => {
 			let duration = (Utc::now() - date).num_days();
-			let years = duration as f32 / 365.24;
+			let years = duration as f32 / 365.2425;
 
 			if years > 0.5 {
 				return Ok(Some(format!("⏱️ {} has been following {} for {years:.2} years", user.name, channel.name)));
@@ -839,7 +843,7 @@ async fn pipe(
 			"stdout"    => { temp_output = temp_output                                 ; continue },
 			"/dev/null" => { temp_output = "".to_string()                              ; continue },
 			"devnull"   => { temp_output = "".to_owned()                               ; continue },
-			"pm"        => { temp_output = format!("/w {} {temp_output}", cmd.sender.name); continue },
+			// "pm"        => { temp_output = format!("/w {} {temp_output}", cmd.sender.name); continue },
 			_           => (),
 		}
 

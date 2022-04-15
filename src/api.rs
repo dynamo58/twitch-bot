@@ -238,7 +238,6 @@ pub async fn get_ffz_channel_emotes<T: Display>(
         .await?;
 
     let res = format!("{{\"resp\": {res}}}");
-    println!("{res:#?}");
     let parsed: models::EmotesFfzResponse = serde_json::from_str(&res)?;
 
     match parsed.resp.len() {
@@ -346,31 +345,6 @@ pub async fn get_weather_report(
 
     return Ok(Some(format!("Weather in {area}, {country}: {temp}, {humid}, {pressure}, {precip}, {wind}")));
 }
-
-// pub async fn translate(
-//     src_lang: &str,
-//     target_lang: &str,
-//     text: &str,
-// ) -> anyhow::Result<String> {
-//     todo!()
-//     // let client = Client::new();
-
-//     // let res = client
-//     //     .get("https://api-free.deepl.com/v2/translate")
-//     //     .form(&[
-//     //         ("text"       , text),
-//     //         ("target_lang", target_lang)
-//     //     ])
-//     //     .send()
-//     //     .await?
-//     //     .text()
-//     //     .await?;
-
-//     // dbg!(&res);
-//     // let info: models::DeelResponse = serde_json::from_str(&res)?;
-
-//     // Ok(info.translations[0].text.clone())
-// }
 
 // query wikipedia for an article gist
 pub async fn query_wikipedia(
@@ -902,7 +876,6 @@ pub async fn query_generic(
 
     let formatted_query = crate::convert_to_html_encoding(query.to_owned());
     let appid = &std::env::var("WOLFRAMALPHA_APPID")?[..];
-    println!("http://api.wolframalpha.com/v2/query?input={formatted_query}&appid={appid}&output=json");
 
     let res = client
         .get(&format!("http://api.wolframalpha.com/v2/query?input={formatted_query}&appid={appid}&output=json"))
@@ -915,7 +888,6 @@ pub async fn query_generic(
 
     if let Some(pods) = parsed.queryresult.pods {
         let main_pod: Vec<models::Pod> = pods
-            // .clone()
             .into_iter()    
             .filter(|p| p.primary == Some(true))
             .collect();
@@ -926,7 +898,6 @@ pub async fn query_generic(
          
         if let Some(subpods) = &main_pod[0].subpods {
             let answer = subpods[0].plaintext.clone();
-            println!("{answer}");
             return Ok(Some(answer));
         }
     } 

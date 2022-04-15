@@ -41,7 +41,6 @@ Lovcen (/lôːʋtɕen/) is a sophisticated [Twitch.tv](https://www.twitch.tv) ch
 | rose           | None                                                                       | send a rose to a random fellow chatter!                            | None
 | rmalias        | [alias name: str]                                                          | remove an alias                                                    | None
 | rmrm           | None                                                                       | alias for the `clearreminders` command                             | None
-| say            | [text]                                                                     | alias for `echo`                                                   | None
 | setalias       | [name: str] [cmd expression]                                               | set an alias for caller (like a substitue for specificied command) | None
 | tanakh         | None                                                                       | get a random verse from the tanakh                                 | None
 | urban          | [term: text]                                                               | queries urbandictionary for a phrase                               | None
