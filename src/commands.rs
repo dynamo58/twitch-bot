@@ -59,6 +59,7 @@ pub async fn handle_command(
 		"wiki"           => query_wikipedia(&cmd).await,
 		"define"         => query_dictionary(&cmd).await,
 		"setalias"       => set_alias(&pool, &cmd).await,
+		"random"         => rand_int_from_range(&cmd).await,
 		"rmalias"        => remove_alias(&pool, &cmd).await,
 		"urban"          => query_urban_dictionary(&cmd).await,
 		"lurk"           => set_lurk_status(&pool, &cmd).await,
@@ -82,8 +83,8 @@ pub async fn handle_command(
 		"wordratio"      => get_word_ratio(&pool, &auth, &cmd, config.prefix, cache_arc).await,
 		"trivia"         => attempt_start_trivia_game(&cmd, &auth, ongoing_trivia_games_arc).await,
 		"rose"           => tag_rand_chatter_with_rose(&cmd.channel.name, &config.disregarded_users).await,
-		"bench"          => bench_command(&pool, client.clone(), config, &auth, cache_arc, &cmd, ongoing_trivia_games_arc).await,
 		"demultiplex"    => demultiplex(&pool, client.clone(), config, &auth, cache_arc, &cmd, ongoing_trivia_games_arc).await,
+		"bench"          => bench_command(&pool, client.clone(), config, &auth, cache_arc, &cmd, ongoing_trivia_games_arc).await,
 		// special commands
 		"pipe"           => pipe(&pool, client.clone(), config, &auth, cache_arc, &cmd, ongoing_trivia_games_arc).await,
 		""               => execute_alias(&pool, client.clone(), config, &auth, cache_arc, &cmd, ongoing_trivia_games_arc).await,
@@ -1062,7 +1063,7 @@ pub async fn demultiplex(
 						return Ok(Some("❌ first arg should be a positive integer".into()));
 					}
 
-					rounds = if n < 11 { n } else { 10 };
+					rounds = if n < 51 { n } else { 50 };
 					new_args = &cmd.args[1..];
 				},
 				Err(_) => return Ok(Some("❌ first arg should be a positive integer".into())),
@@ -1103,4 +1104,41 @@ pub async fn demultiplex(
 	}
 
 	Ok(Some(final_output))
+}
+
+pub async fn rand_int_from_range(
+	cmd: &CommandSource,
+) -> anyhow::Result<Option<String>> {
+	let (min, max) = match cmd.args.len() {
+		0 => return Ok(Some("❌ number expected".into())),
+		1 => {
+			let n = match cmd.args[0].parse::<i16>() {
+				Ok(n)  => n,
+				Err(_) => return Ok(Some("❌ number expected".into()))
+			};
+
+			(1, n)
+		}
+		_ => {
+			let n1 = match cmd.args[0].parse::<i16>() {
+				Ok(n)  => n,
+				Err(_) => return Ok(Some("❌ number expected".into()))
+			};
+
+			let n2 = match cmd.args[1].parse::<i16>() {
+				Ok(n)  => n,
+				Err(_) => return Ok(Some("❌ number expected".into()))
+			};
+
+			(n1, n2)
+		}
+	};
+
+	let number = rand::thread_rng()
+		.gen_range(min..=max)
+		.to_string();
+
+	dbg!(&number);
+
+	Ok(Some(format!("{number}")))
 }

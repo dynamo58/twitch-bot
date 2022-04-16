@@ -36,6 +36,7 @@ Lovcen (/lôːʋtɕen/) is a sophisticated [Twitch.tv](https://www.twitch.tv) ch
 | ping           | None                                                                       | responds with "pong"                                               | None
 | query          | [query: text]                                                              | query WolframAlpha for some question/equation/we                   | None
 | quran          | None                                                                       | get a random verse from the quran                                  | None
+| random         | [int] [opt(int)]                                                           | generate a random number from a range                              | None
 | reddit         | [r/: str] opt(random/upvotes) opt(media) opt(hour/day/week/month/year/all) | get a post from reddit                                             | None
 | remind         | (xh,xm) [user: str] [text]                                                 | reminds user when he types if spec. amouunt of time has passed     | None
 | remindme       | (xh,xm) [text]                                                             | shortcut for reminding one's self                                  | None
