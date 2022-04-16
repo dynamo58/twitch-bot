@@ -193,7 +193,7 @@ async fn main() -> anyhow::Result<()> {
 						Some(duration)	=> {
 							client.say(
 								privmsg.source.params[0][1..].to_owned(),
-								format!("{} is no longer AFK ({})", privmsg.sender.name, fmt_duration(duration)),
+								format!("{} is no longer AFK ({})", privmsg.sender.name, fmt_duration(duration, false)),
 							).await.unwrap();
 						},
 						None => (),
@@ -263,6 +263,8 @@ async fn main() -> anyhow::Result<()> {
 	};
 
 	let t = format!("{}", Local::now());
+	std::env::set_var("STARTUP_TIME", &t);
+
 	println!(
 		"{}   Bot is now running!\n          Local time is {}\n\n",
 		"SUCCESS".green().bold(),

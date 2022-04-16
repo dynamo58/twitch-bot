@@ -17,6 +17,7 @@ use twitch_irc::message::PrivmsgMessage;
 
 
 // some custom errors (ad hoc)
+// TODO: this should be reworked in the future
 #[derive(Error, Debug)]
 pub enum MyError {
 	#[error("index out of bounds")]
@@ -68,12 +69,13 @@ impl TwitchAuth {
 // gets set up during runtime
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Config {
-	pub channels: Vec<String>,
-	pub disregarded_users: Vec<String>,
+	pub channels:                Vec<String>,
+	pub disregarded_users:       Vec<String>,
 	pub commands_reference_path: String,
-	pub prefix: char,
-	pub index_markov: bool,
-	pub track_offliners: bool,
+	pub github_repo_api_path:    Option<String>,
+	pub index_markov:            bool,
+	pub track_offliners:         bool,
+	pub prefix:                  char,
 }
 
 impl Config {
@@ -457,43 +459,50 @@ pub fn convert_to_html_encoding(s: String) -> String {
 
 pub type OngoingTriviaGames = HashMap<String, String>; 
 
-pub fn fmt_duration(dur: chrono::Duration) -> String {
-	let mut out = String::new();
+// format a duration into a string
+#[allow(non_snake_case)]
+pub fn fmt_duration(dur: chrono::Duration, long_format: bool) -> String {
 	let num_sec = dur.num_seconds() as f32;
-
 	if num_sec == 0.0 {
 		return "no time".into();
 	}
+
+	let SECONDS_IN_YEAR   = 31556952.0;
+	let SECONDS_IN_DAY    = 86400.0;
+	let SECONDS_IN_HOUR   = 3600.0;
+	let SECONDS_IN_MINUTE = 60.0;
 	
-	let yrs = (num_sec / 31557082.0).floor();
-	let mts = ((num_sec - (yrs * 31557082.0)) / 2629757.0).floor();
-	let dys = ((num_sec - (yrs * 31557082.0) - (mts * 2629757.0)) / 86400.0).floor();
-	let hrs = ((num_sec - (yrs * 31557082.0) - (mts * 2629757.0) - (dys * 86400.0)) / 3600.0).floor();
-	let mns = ((num_sec - (yrs * 31557082.0) - (mts * 2629757.0) - (dys * 86400.0) - (hrs * 3600.0)) / 60.0).floor();
+	let yrs = (num_sec / SECONDS_IN_YEAR).floor();
+	let dys = ((num_sec - (yrs * SECONDS_IN_YEAR)) / SECONDS_IN_DAY).floor();
+	let hrs = ((num_sec - (yrs * SECONDS_IN_YEAR) - (dys * SECONDS_IN_DAY)) / SECONDS_IN_HOUR).floor();
+	let mns = ((num_sec - (yrs * SECONDS_IN_YEAR) - (dys * SECONDS_IN_DAY) - (hrs * SECONDS_IN_HOUR)) / SECONDS_IN_MINUTE).floor();
 	let scs = dur.num_seconds() % 60;
 
-	if yrs > 0.0 {
-		out.push_str(&format!("{yrs} years, "));
-	}
+	let SECONDS = if long_format { " seconds" } else { "s" };
+	let MINUTES = if long_format { " minutes" } else { "m" };
+	let HOURS   = if long_format { " hours"   } else { "h" };
+	let DAYS    = if long_format { " days"    } else { "d" };
+	let YEARS   = if long_format { " years"   } else { "y" };
+	let mut out = String::new();
 
-	if mts > 0.0 {
-		out.push_str(&format!("{mts} months, "));
+	if yrs > 0.0 {
+		out.push_str(&format!("{yrs}{YEARS}, "));
 	}
 
 	if dys > 0.0 {
-		out.push_str(&format!("{dys} days, "));
+		out.push_str(&format!("{dys}{DAYS}, "));
 	}
 
 	if hrs > 0.0 {
-		out.push_str(&format!("{hrs} hours, "));
+		out.push_str(&format!("{hrs}{HOURS}, "));
 	}
 
 	if mns > 0.0 {
-		out.push_str(&format!("{mns} minutes, "));
+		out.push_str(&format!("{mns}{MINUTES}, "));
 	}
 
 	if scs > 0 {
-		out.push_str(&format!("{scs} seconds, "));
+		out.push_str(&format!("{scs}{SECONDS}, "));
 	}
 
 	out.pop();

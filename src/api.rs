@@ -904,3 +904,22 @@ pub async fn query_generic(
 
     Ok(None)
 }
+
+pub async fn get_github_repo_info(
+    url: &str,
+) -> anyhow::Result<models::GitHubRepoResponse> {
+    let client = Client::new();
+
+    let res = client
+        .get(url)
+        .header("Accept", "application/vnd.github.v3+json")
+        .header("User-Agent", "dynamo58")
+        .send()
+        .await?
+        .text()
+        .await?;
+    
+    let parsed: models::GitHubRepoResponse = serde_json::from_str(&res)?;
+
+    Ok(parsed)
+}

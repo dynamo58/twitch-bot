@@ -17,7 +17,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use async_recursion::async_recursion;
-use chrono::{Duration, Utc};
+use chrono::{offset::TimeZone, DateTime, Local, NaiveDateTime, Utc, Duration};
 use rand::{self, Rng};
 use sqlx::sqlite::SqlitePool;
 use thiserror::Error as ThisError;
@@ -46,7 +46,7 @@ pub async fn handle_command(
 
 	let cmd_out = match cmd.cmd.as_str() {
 		// standard commands
-		"ping"           => ping().await,
+		"ping"           => ping(&config).await,
 		"echo"           => echo(&cmd).await,
 		"decide"         => decide(&cmd).await,
 		"math"           => query(&cmd).await,
@@ -133,10 +133,31 @@ async fn get_commands_reference_link(link: &str) -> anyhow::Result<Option<String
 	Ok(Some(format!("🛠️ {link}")))
 }
 
+
 // ping -> pong
-async fn ping()
+async fn ping(
+	config: &Config,
+)
 -> anyhow::Result<Option<String>> {
-	Ok(Some("pong".into()))
+	let mut out = String::from("Pong!");
+
+	if let Ok(startup_time) = std::env::var("STARTUP_TIME") {
+		let naive_startup = NaiveDateTime::parse_from_str(&startup_time[..startup_time.len()-17], "%Y-%m-%d %H:%M:%S").unwrap();
+		let parsed_startup: DateTime<Local> = Local.from_local_datetime(&naive_startup).unwrap();
+		let dur = chrono::Local::now() - parsed_startup;
+		
+		out.push_str(&format!(" | uptime is {}", fmt_duration(dur, false)));
+	}
+
+	if let Some(url) = &config.github_repo_api_path {
+		let repo = api::get_github_repo_info(url).await?;
+
+		let dur_since_update = Utc::now() - repo.updated_at;
+
+		out.push_str(&format!(" | last update: {} ago", fmt_duration(dur_since_update, false)));
+	}
+
+	Ok(Some(out))
 }
 
 // say whatever caller said
@@ -500,7 +521,7 @@ async fn get_uptime(
 	};
 	let duration = Utc::now() - info.data[0].started_at;
 	
-	let formatted = fmt_duration(duration);
+	let formatted = fmt_duration(duration, false);
 
 	Ok(Some(format!("⏱️ {} has been live for {formatted}", cmd.args[0])))
 }
@@ -571,7 +592,7 @@ async fn get_offline_time(
 	};
 
 	let t = db::get_offline_time(pool, channel.id, user.id).await?;
-	Ok(Some(format!("{} has spent {} in {}'s offline chat!", user.name, channel.name, fmt_duration(t))))
+	Ok(Some(format!("{} has spent {} in {}'s offline chat!", user.name, channel.name, fmt_duration(t, false))))
 }
 
 // get the abstract from a wikipedia page
@@ -1137,8 +1158,6 @@ pub async fn rand_int_from_range(
 	let number = rand::thread_rng()
 		.gen_range(min..=max)
 		.to_string();
-
-	dbg!(&number);
 
 	Ok(Some(format!("{number}")))
 }

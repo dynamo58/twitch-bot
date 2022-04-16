@@ -3,6 +3,7 @@
 	"index_markov": true,
 	"track_offliners": true,
 	"commands_reference_path": "https://github.com/dynamo58/twitch-bot#commands",
+	"github_repo_api_path":    "https://api.github.com/repos/dynamo58/twitch-bot",
 	"channels": [
 		"gisthekey",
 		"lovcen",

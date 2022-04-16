@@ -1,7 +1,0 @@
-✔ rework channels to also be handled by id everywhere @done(22-04-13 05:23)
-- make a function to parse channel name, channel id, user, user_id and user_name, so it's not all over the place in the actual command bodies 
-- rework command error handling
-- maybe make an Erdos number implementation by watching who referenced by whom in channels?
-- think about -> document the scope of each command
-    - ie. if a command takes into account other channels / can access data from other channels, ... 
-    - (it is currently a goulash)
