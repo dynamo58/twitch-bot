@@ -46,9 +46,9 @@ pub async fn handle_command(
 
 	let cmd_out = match cmd.cmd.as_str() {
 		// standard commands
-		"ping"           => ping(),
-		"echo"           => echo(&cmd),
-		"decide"         => decide(&cmd),
+		"ping"           => ping().await,
+		"echo"           => echo(&cmd).await,
+		"decide"         => decide(&cmd).await,
 		"math"           => query(&cmd).await,
 		"query"          => query(&cmd).await,
 		"time"           => get_time(&cmd).await,
@@ -78,11 +78,12 @@ pub async fn handle_command(
 		"remindme"       => add_reminder(&pool, &auth, cache_arc, &cmd, true).await,
 		"remind"         => add_reminder(&pool, &auth, cache_arc, &cmd, false).await,
 		"giveup"         => give_up_trivia(&cmd, &auth,ongoing_trivia_games_arc).await,
-		"commands"       => Ok(Some(format!("🛠️ {}", config.commands_reference_path))),
+		"commands"       => get_commands_reference_link(&config.commands_reference_path).await,
 		"wordratio"      => get_word_ratio(&pool, &auth, &cmd, config.prefix, cache_arc).await,
 		"trivia"         => attempt_start_trivia_game(&cmd, &auth, ongoing_trivia_games_arc).await,
 		"rose"           => tag_rand_chatter_with_rose(&cmd.channel.name, &config.disregarded_users).await,
-		"bench"          => bench_command(&pool, client.clone(), config, &auth, cache_arc, cmd.clone(), ongoing_trivia_games_arc).await,
+		"bench"          => bench_command(&pool, client.clone(), config, &auth, cache_arc, &cmd, ongoing_trivia_games_arc).await,
+		"demultiplex"    => demultiplex(&pool, client.clone(), config, &auth, cache_arc, &cmd, ongoing_trivia_games_arc).await,
 		// special commands
 		"pipe"           => pipe(&pool, client.clone(), config, &auth, cache_arc, &cmd, ongoing_trivia_games_arc).await,
 		""               => execute_alias(&pool, client.clone(), config, &auth, cache_arc, &cmd, ongoing_trivia_games_arc).await,
@@ -121,20 +122,24 @@ pub async fn handle_command(
 			}
 		};
 
-		client.say(cmd.channel.name, out).await.unwrap();
+		client.say(cmd.channel.name.to_owned(), out).await.unwrap();
 	}
 
 	None
 }
 
+async fn get_commands_reference_link(link: &str) -> anyhow::Result<Option<String>> {
+	Ok(Some(format!("🛠️ {link}")))
+}
+
 // ping -> pong
-fn ping()
+async fn ping()
 -> anyhow::Result<Option<String>> {
 	Ok(Some("pong".into()))
 }
 
 // say whatever caller said
-fn echo(
+async fn echo(
 	cmd: &CommandSource,
 ) -> anyhow::Result<Option<String>> {
 	if cmd.sender.is_mvb() {
@@ -530,7 +535,7 @@ async fn bench_command(
 	config:     &Config,
 	auth:       &TwitchAuth,
 	cache_arc:  Arc<Mutex<NameIdCache>>,
-	cmd:        CommandSource,
+	cmd:        &CommandSource,
 	ongoing_trivia_games_arc: Arc<Mutex<crate::OngoingTriviaGames>>,
 ) -> anyhow::Result<Option<String>> {
 	let new_cmd = CommandSource {
@@ -765,7 +770,7 @@ pub async fn get_word_ratio(
 
 // parses the args into a list of (comma-separated) decisions,
 // choses one of them at random and returns it
-fn decide(
+async fn decide(
 	cmd: &CommandSource,
 ) -> anyhow::Result<Option<String>> {
 	match cmd.args.len() {
@@ -1027,4 +1032,75 @@ pub async fn query(
 	};
 
 	Ok(Some(result))
+}
+
+// used to execute a command multiple times
+pub async fn demultiplex(
+	pool:      &SqlitePool,
+	client:    TwitchClient,
+	config:    &Config,
+	auth:      &TwitchAuth,
+	cache_arc: Arc<Mutex<NameIdCache>>,
+	cmd:       &CommandSource,
+	ongoing_trivia_games_arc: Arc<Mutex<crate::OngoingTriviaGames>>,
+) -> anyhow::Result<Option<String>> {
+	if !cmd.sender.is_mvb() {
+		return Ok(Some("❌ requires MVB privileges | E4".into()))
+	}
+
+	let rounds;
+	let new_args;
+
+	match cmd.args.len() {
+		0 => return Ok(Some("❌ insufficient args".into())),
+		1 => return Ok(Some("❌ missing actual command".into())),
+		_ => {
+			match cmd.args[0].parse::<u8>() {
+				Ok(n)  => {
+					// clamp the number of iterations to be 1 <=< 10
+					if n < 1 {
+						return Ok(Some("❌ first arg should be a positive integer".into()));
+					}
+
+					rounds = if n < 11 { n } else { 10 };
+					new_args = &cmd.args[1..];
+				},
+				Err(_) => return Ok(Some("❌ first arg should be a positive integer".into())),
+			};
+		}
+	};
+
+	let new_cmd = CommandSource {
+		cmd: match new_args.get(0) {
+			Some(a) => new_args[0][1..].to_owned(),
+			None => return Ok(Some("❌ alias faulty".into())),
+		},
+		args: match new_args.get(1) {
+			Some(_) => new_args[1..].into_iter().map(|x| x.clone().to_string()).collect::<Vec<String>>(),
+			None => vec![],
+		},
+		channel: cmd.channel.clone(),
+		sender: cmd.sender.clone(),
+		timestamp: cmd.timestamp.clone(),
+	};
+
+	let mut final_output = String::new();
+	for _ in 0..rounds {
+		let temp_out = handle_command(
+			pool,
+			client.clone(),
+			config,
+			auth, cache_arc.clone(),
+			new_cmd.clone(),
+			true,
+			ongoing_trivia_games_arc.clone()
+		).await;
+
+		if let Some(o) = temp_out {
+			final_output.push(' ');
+			final_output.push_str(&o);
+		}
+	}
+
+	Ok(Some(final_output))
 }

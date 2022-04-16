@@ -4,7 +4,6 @@ use std::sync::{Mutex, Arc};
 
 use sqlx::SqlitePool;
 
-
 pub async fn check_for_offliners(
 	pool: &SqlitePool,
 	config: &Config,
