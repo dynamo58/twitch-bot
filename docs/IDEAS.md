@@ -1,4 +1,4 @@
-## Code structure
+## Code/Repo structure
 
 - rework command error handling
     - maybe even do a rework s.t. cmds return a CommandOutput with stuff like { output, is_err, errs, ... }
@@ -12,4 +12,11 @@
 
 - investigate ways of making the bot comply with the concept of **continuous integration**
 
+
 ## Command ideas
+
+- show chat statistics; could be like:
+    - alltime messages
+    - user with most messages since start of stream
+    - ...
+- last seen

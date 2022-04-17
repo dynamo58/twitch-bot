@@ -19,6 +19,7 @@ Lovcen (/lôːʋtɕen/) is a sophisticated [Twitch.tv](https://www.twitch.tv) ch
 | bible          | None                                                                       | get a random verse from the bible                                  | None
 | clearreminders | None                                                                       | clears all reminders the user has set (that are still pending)     | None
 | commands       | None                                                                       | returns a link to the command list (according to config file)      | None
+| chatstats      | [period: str] [mode: str]                                                  | get the chat statistics of a channel                               | None
 | decide         | [options: comma-separated text]                                            | indecisive? let pseudorandomness choose                            | None
 | delcmd         | [name: str]                                                                | delete a channel command                                           | Broadcaster/Moderator/VIP
 | demultiplex    | [iterations: int] [command expression]                                     | repeat a command multiple times                                    | Broadcaster/Moderator/VIP
@@ -33,6 +34,7 @@ Lovcen (/lôːʋtɕen/) is a sophisticated [Twitch.tv](https://www.twitch.tv) ch
 | math           | [expression: text]                                                         | alias for the `query` command                                      | None
 | newcmd         | [type: templ\|paste\|incr] [expression: str]                               | create a new channel command                                       | Broadcaster/Moderator/VIP
 | offlinetime    | [name: opt(str)]                                                           | returns the time a user has thus far spent in offline chat         | None
+| pasta          | None                                                                       | random copypasta from `assets/copypastas.json` (no ascii art)      | None
 | ping           | None                                                                       | responds with "pong"                                               | None
 | query          | [query: text]                                                              | query WolframAlpha for some question/equation/we                   | None
 | quran          | None                                                                       | get a random verse from the quran                                  | None
@@ -53,6 +55,7 @@ Lovcen (/lôːʋtɕen/) is a sophisticated [Twitch.tv](https://www.twitch.tv) ch
 | weather        | [location: text]                                                           | get weather report from specified location                         | None
 | wiki           | [phrase: text]                                                             | tries to query Wikipedia for searched topic/title                  | None
 | wordratio      | [user: opt(str)] [word: str]                                               | get the ratio of messages of a user that contain certain word      | None
+
 
 # Run yourself
 

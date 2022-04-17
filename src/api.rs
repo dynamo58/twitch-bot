@@ -44,6 +44,29 @@ pub async fn id_from_nick(
     }
 }
 
+pub async fn name_from_id(
+    twitch_auth: &TwitchAuth,
+    user_id: i32,
+) -> anyhow::Result<Option<String>> {
+    let client = Client::new();
+
+    let res = client
+        .get(&format!("https://api.twitch.tv/helix/users?id={user_id}"))
+        .header("Client-ID", twitch_auth.client_id.clone())
+        .header("Authorization", format!("Bearer {}", twitch_auth.oauth.clone()))
+        .send()
+        .await?
+        .text()
+        .await?;
+
+    let parsed: models::UsersResponse = serde_json::from_str(&res)?;
+
+    match parsed.data.len() {
+        0 => Ok(None),
+        _ => Ok(Some(parsed.data[0].display_name.clone()))
+    }
+}
+
 pub async fn get_acc_creation_date(
     nick: &str,
     auth: &TwitchAuth,
@@ -132,6 +155,30 @@ pub async fn get_stream_info(
     match info.data.len() {
         0 => return Ok(None),
         _ => return Ok(Some(info))
+    }
+}
+
+// check if a streamer is live
+pub async fn streamer_is_live(
+    auth: &TwitchAuth,
+    channel_name: &str,
+) -> anyhow::Result<bool> {
+    let client = Client::new();
+
+    let res = client
+        .get(&format!("https://api.twitch.tv/helix/streams?user_login={channel_name}"))
+        .header("Client-ID", auth.client_id.clone())
+        .header("Authorization", format!("Bearer {}", auth.oauth.clone()))
+        .send()
+        .await?
+        .text()
+        .await?;
+
+    let info: models::StreamsResponse = serde_json::from_str(&res)?;
+
+    match info.data.len() {
+        0 => return Ok(false),
+        _ => return Ok(true)
     }
 }
 

@@ -18,6 +18,9 @@ struct StringQR(String);
 struct I32QR(i32);
 
 #[derive(sqlx::FromRow)]
+pub struct I32I32QR(pub i32, pub i32);
+
+#[derive(sqlx::FromRow)]
 struct DateTimeQR(DateTime<Utc>);
 
 #[derive(sqlx::FromRow)]
@@ -812,3 +815,178 @@ pub async fn get_word_ratio(
 	
 	Ok(with_word_count as f32 / total_count as f32)
 }
+
+pub enum ChatStatPeriod {
+	ThisStream,
+	Last24Hours,
+	Alltime,
+}
+
+impl ChatStatPeriod {
+	#[allow(dead_code)]
+	pub fn from_vec(v: &Vec<String>) -> Self {
+		let args = v.join(" ").to_lowercase();
+		let opts = ["stream", "this stream", "24", "last24hours", "all", "alltime"];
+
+		// the default one
+		let mut out_idx = 4;
+
+        for opt in &opts {
+            if args.contains(opt) {
+                out_idx = opts.iter().position(|r| r == opt).unwrap();
+                break;
+            }
+        }
+
+		match out_idx {
+			_x @ 0..=1 => Self::ThisStream,
+			_x @ 2..=3 => Self::Last24Hours,
+			_ => Self::Alltime,
+		}
+	}
+
+	pub fn from_str(s: &str) -> Self {
+		match s.to_lowercase().as_str() {
+			"all"      => Self::Alltime,
+			"alltime"  => Self::Alltime,
+			"all_time" => Self::Alltime,
+			"stream"      => Self::ThisStream,
+			"thisstream"  => Self::ThisStream,
+			"this_stream" => Self::ThisStream,
+			"24"            => Self::Last24Hours,
+			"last24hours"   => Self::Last24Hours,
+			"last_24_hours" => Self::Last24Hours,
+			_ => Self::Alltime,
+		}
+	}
+}
+
+pub enum ChatStatsMode {
+	Top(u8),           // the number of users
+	One(i32),          // the twitch user_id of the one
+	WordCount(String), // the phrase, that is being searched for
+}
+
+impl ChatStatsMode {
+	pub async fn from_cmd(cmd: &CommandSource, twitch_auth: &crate::TwitchAuth) -> anyhow::Result<Self> {
+		let args = cmd.args.join(" ").to_lowercase();
+		let opts = ["top", "out", "wordcount"];
+
+		// the default one
+		let mut out_idx = 0;
+
+        for opt in &opts {
+            if args.contains(opt) {
+                out_idx = opts.iter().position(|r| r == opt).unwrap();
+                break;
+            }
+        }
+
+		match out_idx {
+			0 => {
+				// again, the default one
+				let mut top_count = 3;
+
+				if let Some(num) = cmd.args.get(2) {
+					if let Ok(parsed_num) = num.parse::<u8>() {
+						// clamp the number to be 1 <= x <= 5
+						if parsed_num > 0 && parsed_num < 6 {
+							top_count = parsed_num
+						}
+					}
+				}
+
+				Ok(Self::Top(top_count))
+			},
+			1 => {
+				// again again, the default one
+				let mut user_id = cmd.sender.id;
+
+				if let Some(user_name) = cmd.args.get(2) {
+					if let Some(id) = crate::api::id_from_nick(user_name, twitch_auth).await? {
+						user_id = id;
+					}
+				}
+
+				Ok(Self::One(user_id))
+			},
+			2 => {
+
+				let phrase = match cmd.args.get(2) {
+					Some(_) => cmd.args[2..].join(" "),
+					None    => "".to_owned(),
+				};
+
+				Ok(Self::WordCount(phrase))
+			},
+			_ => Ok(Self::Top(3)),
+		}
+	}
+}
+
+pub async fn get_channel_chat_stats(
+	pool:        &SqlitePool,
+	channel:     &crate::Channel,
+	twitch_auth: &crate::TwitchAuth,
+	period:      ChatStatPeriod,
+	mode:        ChatStatsMode,
+) -> anyhow::Result<Vec<I32I32QR>> {
+	let mut conn = pool.acquire().await?;
+
+	let period_clause = match period {
+		ChatStatPeriod::Last24Hours => {
+			let yesterday = Utc::now() - chrono::Duration::days(1);
+			let clause    = format!(">= \"{}\"", yesterday.format("%Y-%m-%d %H:%M:%S"));
+
+			clause
+		},
+		ChatStatPeriod::Alltime     => "LIKE \"%\"".to_owned(),
+		ChatStatPeriod::ThisStream  => {
+			let stream_info = crate::api::get_stream_info(twitch_auth, &channel.name).await?.ok_or(MyError::NotFound)?;
+			let clause = format!(">= \"{}\"", stream_info.data[0].started_at);
+
+			clause
+		},
+	};
+
+	let (mode_clause, limit) = match mode {
+		ChatStatsMode::One(id) => {
+			let clause = format!("AND WHERE sender_id = {id}");
+
+			(clause, 10)
+		},
+		ChatStatsMode::Top(num) => {
+			// is clamped from before
+			("".to_owned(), num)
+		},
+		ChatStatsMode::WordCount(s) => {
+			let clause = format!("AND message LIKE \"%{s}%\"");
+		
+			(clause, 1)
+		},
+	};
+
+	// get the count of rows which contain `word`
+	let sql = r#"
+		SELECT sender_id, COUNT(*) AS cnt
+			FROM CHANNEL_{{ CHANNEL_ID }}
+				WHERE
+					timestamp {{ PERIOD_CLAUSE }}
+				{{ MODE_CLAUSE }}
+				GROUP BY
+					sender_id
+				ORDER BY
+					cnt DESC
+				LIMIT {{ LIMIT_NUM }};
+	"#
+		.replace("{{ CHANNEL_ID }}"   , &channel.id.to_string())
+		.replace("{{ PERIOD_CLAUSE }}", &period_clause)
+		.replace("{{ MODE_CLAUSE }}"  , &mode_clause)
+		.replace("{{ LIMIT_NUM }}"    , &limit.to_string());
+
+	let rows: Vec<I32I32QR> = sqlx::query_as::<Sqlite, I32I32QR>(&sql)
+		.fetch_all(&mut *conn)
+		.await?;
+		
+	Ok(rows)
+} 

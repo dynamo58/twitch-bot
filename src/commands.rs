@@ -52,6 +52,7 @@ pub async fn handle_command(
 		"math"           => query(&cmd).await,
 		"query"          => query(&cmd).await,
 		"time"           => get_time(&cmd).await,
+		"pasta"          => get_rand_pasta().await,
 		"markov"         => markov(&pool, &cmd).await,
 		"newcmd"         => new_cmd(&pool, &cmd).await,
 		"suggest"        => suggest(&pool, &cmd).await,
@@ -85,6 +86,7 @@ pub async fn handle_command(
 		"rose"           => tag_rand_chatter_with_rose(&cmd.channel.name, &config.disregarded_users).await,
 		"demultiplex"    => demultiplex(&pool, client.clone(), config, &auth, cache_arc, &cmd, ongoing_trivia_games_arc).await,
 		"bench"          => bench_command(&pool, client.clone(), config, &auth, cache_arc, &cmd, ongoing_trivia_games_arc).await,
+		"chatstats"       => get_chatstats(&pool, &cmd, &auth).await,
 		// special commands
 		"pipe"           => pipe(&pool, client.clone(), config, &auth, cache_arc, &cmd, ongoing_trivia_games_arc).await,
 		""               => execute_alias(&pool, client.clone(), config, &auth, cache_arc, &cmd, ongoing_trivia_games_arc).await,
@@ -146,13 +148,13 @@ async fn ping(
 		let parsed_startup: DateTime<Local> = Local.from_local_datetime(&naive_startup).unwrap();
 		let dur = chrono::Local::now() - parsed_startup;
 		
-		out.push_str(&format!(" | uptime is {}", fmt_duration(dur, false)));
+		out.push_str(&format!(" | uptime: {}", fmt_duration(dur, false)));
 	}
 
 	if let Some(url) = &config.github_repo_api_path {
 		let repo = api::get_github_repo_info(url).await?;
 
-		let dur_since_update = Utc::now() - repo.updated_at;
+		let dur_since_update = Utc::now() - repo.pushed_at;
 
 		out.push_str(&format!(" | last update: {} ago", fmt_duration(dur_since_update, false)));
 	}
@@ -523,7 +525,7 @@ async fn get_uptime(
 	
 	let formatted = fmt_duration(duration, false);
 
-	Ok(Some(format!("⏱️ {} has been live for {formatted}", cmd.args[0])))
+	Ok(Some(format!("⏱️ {channel_name} has been live for {formatted}")))
 }
 
 // the language identifiers
@@ -1160,4 +1162,73 @@ pub async fn rand_int_from_range(
 		.to_string();
 
 	Ok(Some(format!("{number}")))
+}
+
+#[allow(non_ascii_idents)]
+pub async fn get_rand_pasta()
+-> anyhow::Result<Option<String>> {
+	let raw: String = std::fs::read_to_string(
+		std::path::Path::new("assets/copypastas.json")
+	)?;
+		
+	let pastas: crate::api_models::CopypastaFileJSON = serde_json::from_str(&raw)?;
+	let pastas = pastas.pastas;
+	let rand_pasta = pastas[rand::thread_rng().gen_range(0..pastas.len())]
+		.text
+		.clone();
+
+	Ok(Some((&rand_pasta[..]).to_owned()))
+}
+
+// get the chat statistics of a channel
+pub async fn get_chatstats(
+	pool:        &SqlitePool,
+	cmd:         &CommandSource,
+	twitch_auth: &TwitchAuth,
+) -> anyhow::Result<Option<String>> {
+	let (period, mode) = match cmd.args.len() {
+		0 => {
+			let period = db::ChatStatPeriod::Alltime;
+			let mode   = db::ChatStatsMode::Top(3);
+
+			(period, mode)
+		},
+
+		1 => {
+			let period = db::ChatStatPeriod::from_str(&cmd.args[0]);
+			let mode   = db::ChatStatsMode::Top(3);
+
+			(period, mode)
+		}
+		_ => {
+			let period = db::ChatStatPeriod::from_str(&cmd.args[0]);
+			let mode   = db::ChatStatsMode::from_cmd(&cmd, twitch_auth).await?;
+
+			(period, mode)
+		}
+	};
+
+	if let db::ChatStatPeriod::ThisStream = period {
+		if !api::streamer_is_live(&twitch_auth, &cmd.channel.name).await? {
+			return Ok(Some("❌ streamer is not live".into()))
+		}
+	}
+
+	let stats = db::get_channel_chat_stats(pool, &cmd.channel, twitch_auth, period, mode).await?;
+
+	let mut out = String::new();
+	let mut place: u8 = 1;
+	for stat in stats {
+		let user_id = stat.0;
+		let count = stat.1;
+
+		let user_name = api::name_from_id(twitch_auth, user_id)
+			.await?
+			.unwrap();
+
+		out.push_str(&format!(" {place}. {user_name} ({count})"));
+		place += 1;
+	}
+
+	Ok(Some(out))
 }

@@ -7,6 +7,7 @@ mod background;
 use twitch_bot::{
 	Config,
 	CommandSource,
+	Channel,
 	MyError,
 	TwitchAuth, 
 	TwitchBadge,

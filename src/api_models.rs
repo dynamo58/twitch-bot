@@ -68,7 +68,7 @@ pub struct Chatters {
     pub viewers: Vec<String>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StreamsResponse {
     pub data: Vec<Daum>,
@@ -535,4 +535,14 @@ pub struct GitHubRepoResponse {
     pub temp_clone_token: Option<String>,
     pub network_count: i64,
     pub subscribers_count: i64,
+}
+
+#[derive(Deserialize)]
+pub struct CopypastaFileJSON {
+    pub pastas: Vec<Pasta>,
+}
+
+#[derive(Clone, Deserialize)]
+pub struct Pasta {
+    pub text: String,
 }
