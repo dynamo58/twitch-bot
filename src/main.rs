@@ -48,9 +48,9 @@ async fn main() -> anyhow::Result<()> {
 
 	// load all of the credentials and configurations
 	let config = Config::from_config_file()
-		.expect(&format!("{}   Couldn't load config, aborting.", "ERROR  ".red().bold()));
+		.unwrap_or_else(|_| panic!("{}   Couldn't load config, aborting.", "ERROR  ".red().bold()));
 	let auth = TwitchAuth::from_env()
-		.expect(&format!("{}   Couldn't load Twitch credentials from .env", "ERROR  ".red().bold()));
+		.unwrap_or_else(|_| panic!("{}   Couldn't load Twitch credentials from .env", "ERROR  ".red().bold()));
 
 	println!("{}   Obtained credentials and config from local files", "INFO   ".blue().bold());
 
@@ -75,7 +75,7 @@ async fn main() -> anyhow::Result<()> {
 	// instantiate database connection pool
     let pool = SqlitePool::connect(DB_PATH)
 		.await
-		.expect(&format!("{}   Database connection could not be established, aborting.", "ERROR  ".red().bold()));
+		.unwrap_or_else(|_| panic!("{}   Database connection could not be established, aborting.", "ERROR  ".red().bold()));
 
 
 
@@ -83,26 +83,27 @@ async fn main() -> anyhow::Result<()> {
 	// to be present in database
 	db::init_db(&pool)
 		.await
-		.expect(&format!("{}   Database could not be set up, aborting.", "ERROR  ".red().bold()));
+		.unwrap_or_else(|_| panic!("{}   Database could not be set up, aborting.", "ERROR  ".red().bold()));
 
 	// create database tables for channels in config
 	// (if they do not already exist)
 	for channel in &config.channels {
 		let channel_id = api::id_from_nick(channel, &auth)
 			.await?
-			.expect(&format!(
-				"{}   Channel \"{}\" wasn't found, aborting",
-				"ERROR  ".red().bold(),
-				channel.bold()
-			));
+			.unwrap_or_else(||
+				panic!(
+					"{}   Channel \"{}\" wasn't found, aborting",
+               		"ERROR  ".red().bold(),
+               		channel.bold()
+				)
+			);
 
 		db::try_create_tables_for_channel(&pool, channel_id)
 			.await
-			.expect(
-				&format!(
-					"{}   Could not create tables for channel \"{}\", aborting",
-					"ERROR  ".red().bold(),
-					channel.bold()
+			.unwrap_or_else(|_|
+				panic!("{}   Could not create tables for channel \"{}\", aborting",
+                    "ERROR  ".red().bold(),
+                    channel.bold(),
 				)
 			);
 	}
@@ -187,18 +188,16 @@ async fn main() -> anyhow::Result<()> {
 						Err(e) => println!("{}   Uncaught error; message: {e}", "ERROR    ".red().bold()),
 					};
 
-					match db::is_lurker(
+
+					if let Some(duration) = db::is_lurker(
 						&pool,
 						privmsg.sender.id.parse::<i32>().unwrap()
 					).await.unwrap() {
-						Some(duration)	=> {
-							client.say(
-								privmsg.source.params[0][1..].to_owned(),
-								format!("{} is no longer AFK ({})", privmsg.sender.name, fmt_duration(duration, false)),
-							).await.unwrap();
-						},
-						None => (),
-					}
+						client.say(
+							privmsg.source.params[0][1..].to_owned(),
+							format!("{} is no longer AFK ({})", privmsg.sender.name, fmt_duration(duration, false)),
+						).await.unwrap();
+					};
 
 					// check if user has any reminders set for them
 					let reminders = 
@@ -229,7 +228,7 @@ async fn main() -> anyhow::Result<()> {
 					}
 
 					// if message is a command, handle it
-					if privmsg.message_text.chars().nth(0).unwrap() == config.prefix {
+					if privmsg.message_text.chars().next().unwrap() == config.prefix {
 						let cmd_src = CommandSource::from_privmsg(privmsg);
 						handle_command(&pool, client.clone(), &config, &auth, nameid_cache_arc.clone(), cmd_src, false, ongoing_trivia_games_arc.clone()).await;
 					} else {

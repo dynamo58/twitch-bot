@@ -41,7 +41,7 @@ pub async fn init_db(
 	let mut conn = pool.acquire().await?;
 	let sql = include_str!("../assets/sql/init_db.sql");
 
-	sqlx::query::<Sqlite>(&sql)
+	sqlx::query::<Sqlite>(sql)
 		.execute(&mut *conn)
 		.await?;
 	
@@ -103,20 +103,19 @@ pub async fn log_markov(
 	let words = privmsg.message_text.split(' ').collect::<Vec<&str>>();
 
 	// this is kinda tacky but I couldn't get it working otherwise, so idk
-	let emote_cache;
-	if let Ok(cache) = emote_cache_arc.lock() {
-		emote_cache = cache.clone();
+	let emote_cache = if let Ok(cache) = emote_cache_arc.lock() {
+		cache.clone()
 	} else {
 		return Ok(());
-	}
+	};
 
 	// process each word (besides the last one)
 	for idx in 0..words.len()-1 {
-		let word = match format_markov_entry(&privmsg, &emote_cache, words[idx]) {
+		let word = match format_markov_entry(privmsg, &emote_cache, words[idx]) {
 			Ok(a) => a,
 			Err(_) => return Ok(()),
 		};
-		let succ = match format_markov_entry(&privmsg, &emote_cache, words[idx + 1]) {
+		let succ = match format_markov_entry(privmsg, &emote_cache, words[idx + 1]) {
 			Ok(a) => a,
 			Err(_) => return Ok(()),
 		};
@@ -157,12 +156,12 @@ pub async fn check_for_reminders(
 			AND raise_timestamp <= DATETIME('NOW');
 	"#;
 
-	let reminders: Vec<Reminder> = sqlx::query_as::<Sqlite, Reminder>(&sql)
+	let reminders: Vec<Reminder> = sqlx::query_as::<Sqlite, Reminder>(sql)
 		.bind(user_id)
 		.fetch_all(&mut *conn)
 		.await?;
 
-	if reminders.len() == 0 {
+	if reminders.is_empty() {
 		return Ok(None);
 	}
 
@@ -176,7 +175,7 @@ pub async fn check_for_reminders(
 	"#;
 
 	for r in &reminders {
-		sqlx::query::<Sqlite>(&sql)
+		sqlx::query::<Sqlite>(sql)
 		.bind(r.id)
 		.execute(&mut *conn)
 		.await?;
@@ -232,7 +231,7 @@ fn format_markov_entry(
     // the invisible braille char
 
     // shave off all trailing unwanted chars
-    while invalid_front_chars.contains(&out.chars().nth(0).ok_or(MyError::OutOfBounds)?) {
+    while invalid_front_chars.contains(&out.chars().next().ok_or(MyError::OutOfBounds)?) {
         out.remove(0);
     }
 
@@ -242,12 +241,12 @@ fn format_markov_entry(
 
     // if there is still the blank braille's or it is a link
 	// don't remove anything; else remove the formatted word
-    if out.contains("⠀") || out.contains("//") || out.contains("www.") || out == "".to_string() { 
+    if out.contains('⠀') || out.contains("//") || out.contains("www.") || out == *"" { 
         Ok(None)
     } else {
-		match emote_cache.self_or_privmsg_has_emote(&privmsg, &out) {
-			true  => return Ok(Some(out)),
-			false => return Ok(Some(out.to_lowercase()))
+		match emote_cache.self_or_privmsg_has_emote(privmsg, &out) {
+			true  => Ok(Some(out)),
+			false => Ok(Some(out.to_lowercase()))
 		}
         
     }
@@ -267,7 +266,7 @@ pub async fn clear_users_sent_reminders(
 		SELECT changes();
 	"#;
 
-	let num_affected: i32 = sqlx::query_as::<Sqlite, I32QR>(&sql)
+	let num_affected: i32 = sqlx::query_as::<Sqlite, I32QR>(sql)
 		.bind(user_id)
 		.fetch_all(&mut *conn)
 		.await?
@@ -301,7 +300,7 @@ pub async fn get_rand_markov_succ(
 		.map(|succ| succ.0.clone())
 		.collect();
 	
-	if succs.len() < 1 {
+	if succs.is_empty() {
 		return Ok(None);
 	}
 
@@ -325,17 +324,10 @@ pub async fn insert_reminder(
                 (?1, ?2, ?3, ?4);
     "#;
 
-	sqlx::query::<Sqlite>(&sql)
+	sqlx::query::<Sqlite>(sql)
 		.bind(reminder.from_user_id)
 		.bind(reminder.for_user_id)
-		.bind(
-			&format!(
-				"{}",
-				reminder.raise_timestamp
-					.format("%Y-%m-%d %H:%M:%S")
-					.to_string()
-			)
-		)
+		.bind(&reminder.raise_timestamp.format("%Y-%m-%d %H:%M:%S").to_string())
 		.bind(&reminder.message)
 		.execute(&mut *conn)
 		.await?;
@@ -360,7 +352,8 @@ pub async fn log_command(
             VALUES
                 (?1, ?2, ?3, ?4, ?5, ?6, ?7);
     "#;
-	sqlx::query::<Sqlite>(&sql)
+
+	sqlx::query::<Sqlite>(sql)
 		.bind(cmd.sender.id)
 		.bind(&cmd.sender.name)
 		.bind(&cmd.cmd)
@@ -372,7 +365,6 @@ pub async fn log_command(
 				"{}",
 				Utc::now()
 					.format("%Y-%m-%d %H:%M:%S")
-					.to_string()
 			)
 		)
 		.execute(&mut *conn)
@@ -396,7 +388,7 @@ pub async fn get_explanation(
 				code=?1;
 	"#;
 
-	let messages: Vec<String> = sqlx::query_as::<Sqlite, StringQR>(&sql)
+	let messages: Vec<String> = sqlx::query_as::<Sqlite, StringQR>(sql)
 		.bind(code)
 		.fetch_all(&mut *conn)
 		.await?
@@ -404,10 +396,10 @@ pub async fn get_explanation(
 		.map(|succ| succ.0.clone())
 		.collect();
 
-	if messages.len() == 0 {
-		return Ok(Some("no such error code".into()));
+	if messages.is_empty() {
+		Ok(Some("no such error code".into()))
 	} else {
-		return Ok(Some(messages[0].clone()));
+		Ok(Some(messages[0].clone()))
 	}
 }
 
@@ -428,7 +420,7 @@ pub async fn set_alias<'a>(
                 (?1, ?2, ?3);
     "#;
 
-	sqlx::query::<Sqlite>(&sql)
+	sqlx::query::<Sqlite>(sql)
 		.bind(owner_id)
 		.bind(alias)
 		.bind(alias_cmd)
@@ -458,7 +450,7 @@ pub async fn get_alias_cmd(
 	"#;
 
 	// length should be 1 || 0
-	let aliases: Vec<String> = sqlx::query_as::<Sqlite, StringQR>(&sql)
+	let aliases: Vec<String> = sqlx::query_as::<Sqlite, StringQR>(sql)
 		.bind(owner_id)
 		.bind(alias)
 		.fetch_all(&mut *conn)
@@ -467,10 +459,10 @@ pub async fn get_alias_cmd(
 		.map(|a| a.0.clone())
 		.collect();
 	
-	if aliases.len() == 0 {
-		return Ok(None);
+	if aliases.is_empty() {
+		Ok(None)
 	} else {
-		return Ok(Some(aliases[0].to_owned()));
+		Ok(Some(aliases[0].to_owned()))
 	}
 }
 
@@ -492,7 +484,7 @@ pub async fn remove_alias<'a>(
 		SELECT changes();
 	"#;
 
-	let num_affected: i32 = sqlx::query_as::<Sqlite, I32QR>(&sql)
+	let num_affected: i32 = sqlx::query_as::<Sqlite, I32QR>(sql)
 		.bind(owner_id)
 		.bind(alias)
 		.fetch_all(&mut *conn)
@@ -525,10 +517,10 @@ pub async fn get_first_message(
 		.map(|succ| succ.0.clone())
 		.collect();
 	
-	if messages.len() < 1 {
-		return Ok(None);
+	if messages.is_empty() {
+		Ok(None)
 	} else {
-		return Ok(Some(messages[0].clone()));
+		Ok(Some(messages[0].clone()))
 	}
 }
 
@@ -549,7 +541,7 @@ pub async fn save_suggestion(
                 (?1, ?2, ?3, ?4);
     "#;
 
-	sqlx::query::<Sqlite>(&sql)
+	sqlx::query::<Sqlite>(sql)
 		.bind(sender_id)
 		.bind(sender_name)
 		.bind(text)
@@ -575,7 +567,7 @@ pub async fn set_lurk_status(
 				(?1, ?2);
 	"#;
 
-	sqlx::query::<Sqlite>(&sql)
+	sqlx::query::<Sqlite>(sql)
 		.bind(sender_id)
 		.bind(timestamp.format("%Y-%m-%d %H:%M:%S").to_string())
 		.execute(&mut *conn)
@@ -599,7 +591,7 @@ pub async fn is_lurker(
 				lurker_id=?1;
 	"#;
 
-	let lurkers: Vec<DateTimeQR> = sqlx::query_as::<Sqlite, DateTimeQR>(&sql)
+	let lurkers: Vec<DateTimeQR> = sqlx::query_as::<Sqlite, DateTimeQR>(sql)
 		.bind(sender_id)
 		.fetch_all(&mut *conn)
 		.await?;
@@ -617,7 +609,7 @@ pub async fn is_lurker(
 				lurker_id=?1;
 	"#;
 
-	sqlx::query::<Sqlite>(&sql)
+	sqlx::query::<Sqlite>(sql)
 		.bind(sender_id)
 		.execute(&mut *conn)
 		.await?;
@@ -675,8 +667,8 @@ pub async fn get_offline_time(
 		.await?;
 
 	match offliners_secs.get(0) {
-		Some(a) => return Ok(chrono::Duration::seconds(a.0 as i64)),
-		None    => return Ok(chrono::Duration::seconds(0         )),
+		Some(a) => Ok(chrono::Duration::seconds(a.0 as i64)),
+		None    => Ok(chrono::Duration::seconds(0         )),
 	}
 }
 
@@ -731,10 +723,10 @@ pub async fn get_channel_cmd(
 		.fetch_all(&mut *conn)
 		.await?;
 
-	if cmds.len() == 0 {
-		return Ok(None);
+	if cmds.is_empty() {
+		Ok(None)
 	} else {
-		return Ok(Some((cmds[0].0.clone(), cmds[0].1.clone(), cmds[0].2)));
+		Ok(Some((cmds[0].0.clone(), cmds[0].1.clone(), cmds[0].2)))
 	}
 }
 
@@ -771,9 +763,6 @@ pub async fn get_word_ratio(
 ) -> anyhow::Result<f32> {
 	let mut conn = pool.acquire().await?;
 
-	let with_word_count;
-	let total_count;
-
 	// get the count of rows which contain `word`
 	let sql = r#"
 		SELECT COUNT(*)
@@ -791,7 +780,7 @@ pub async fn get_word_ratio(
 		.replace("?2", word)
 		.replace("?3", &cmd_prefix.to_string());
 
-	with_word_count = sqlx::query_as::<Sqlite, I32QR>(&sql)
+	let with_word_count = sqlx::query_as::<Sqlite, I32QR>(&sql)
 		.bind(user_id)
 		.fetch_all(&mut *conn)
 		.await?[0].0;
@@ -808,7 +797,7 @@ pub async fn get_word_ratio(
 		.replace("{{ CHANNEL_ID }}", &channel_id.to_string())
 		.replace("?2", &cmd_prefix.to_string());
 
-	total_count = sqlx::query_as::<Sqlite, I32QR>(&sql)
+	let total_count = sqlx::query_as::<Sqlite, I32QR>(&sql)
 		.bind(user_id)
 		.fetch_all(&mut *conn)
 		.await?[0].0;
@@ -824,7 +813,7 @@ pub enum ChatStatPeriod {
 
 impl ChatStatPeriod {
 	#[allow(dead_code)]
-	pub fn from_vec(v: &Vec<String>) -> Self {
+	pub fn from_vec(v: &[String]) -> Self {
 		let args = v.join(" ").to_lowercase();
 		let opts = ["stream", "this stream", "24", "last24hours", "all", "alltime"];
 
@@ -844,19 +833,23 @@ impl ChatStatPeriod {
 			_ => Self::Alltime,
 		}
 	}
+}
 
-	pub fn from_str(s: &str) -> Self {
+impl std::str::FromStr for ChatStatPeriod {
+	type Err = ();
+
+	fn from_str(s: &str) -> anyhow::Result<Self, ()> {
 		match s.to_lowercase().as_str() {
-			"all"      => Self::Alltime,
-			"alltime"  => Self::Alltime,
-			"all_time" => Self::Alltime,
-			"stream"      => Self::ThisStream,
-			"thisstream"  => Self::ThisStream,
-			"this_stream" => Self::ThisStream,
-			"24"            => Self::Last24Hours,
-			"last24hours"   => Self::Last24Hours,
-			"last_24_hours" => Self::Last24Hours,
-			_ => Self::Alltime,
+			"all"           => Ok(Self::Alltime),
+			"alltime"       => Ok(Self::Alltime),
+			"all_time"      => Ok(Self::Alltime),
+			"stream"        => Ok(Self::ThisStream),
+			"thisstream"    => Ok(Self::ThisStream),
+			"this_stream"   => Ok(Self::ThisStream),
+			"24"            => Ok(Self::Last24Hours),
+			"last24hours"   => Ok(Self::Last24Hours),
+			"last_24_hours" => Ok(Self::Last24Hours),
+			_               => Ok(Self::Alltime),
 		}
 	}
 }

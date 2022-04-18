@@ -38,9 +38,9 @@ pub async fn id_from_nick(
     nick: &str,
     auth: &TwitchAuth,
 ) -> anyhow::Result<Option<i32>> {
-    match get_twitch_user(&nick, &auth).await?.data.get(0) {
-        Some(data) => return Ok(Some(data.id.parse::<i32>().unwrap())),
-        None       => return Ok(None),
+    match get_twitch_user(nick, auth).await?.data.get(0) {
+        Some(data) => Ok(Some(data.id.parse::<i32>().unwrap())),
+        None       => Ok(None),
     }
 }
 
@@ -71,9 +71,9 @@ pub async fn get_acc_creation_date(
     nick: &str,
     auth: &TwitchAuth,
 ) -> anyhow::Result<Option<DateTime<Utc>>> {
-    match get_twitch_user(&nick, &auth).await?.data.get(0) {
-        Some(data) => return Ok(Some(data.created_at)),
-        None       => return Ok(None),
+    match get_twitch_user(nick, auth).await?.data.get(0) {
+        Some(data) => Ok(Some(data.created_at)),
+        None       => Ok(None),
     }
 }
 
@@ -128,8 +128,8 @@ pub async fn get_chatters(
     chatters.append(&mut parsed.chatters.viewers);
 
     match chatters.len() {
-        0 => return Ok(None),
-        _ => return Ok(Some(chatters)),
+        0 => Ok(None),
+        _ => Ok(Some(chatters)),
     }
 }
 
@@ -153,8 +153,8 @@ pub async fn get_stream_info(
     let info: models::StreamsResponse = serde_json::from_str(&res)?;
 
     match info.data.len() {
-        0 => return Ok(None),
-        _ => return Ok(Some(info))
+        0 => Ok(None),
+        _ => Ok(Some(info))
     }
 }
 
@@ -177,8 +177,8 @@ pub async fn streamer_is_live(
     let info: models::StreamsResponse = serde_json::from_str(&res)?;
 
     match info.data.len() {
-        0 => return Ok(false),
-        _ => return Ok(true)
+        0 => Ok(false),
+        _ => Ok(true)
     }
 }
 
@@ -198,8 +198,8 @@ pub async fn get_7tv_channel_emotes(
     let parsed: models::Emotes7TVResponse = serde_json::from_str(&res)?;
 
     match parsed.len() {
-        0 => return Ok(None),
-        _ => return Ok(Some(parsed.iter().map(|emote| emote.name.to_string()).collect()))
+        0 => Ok(None),
+        _ => Ok(Some(parsed.iter().map(|emote| emote.name.to_string()).collect()))
     }
 }
 
@@ -218,8 +218,8 @@ pub async fn get_7tv_global_emotes(
     let parsed: models::GlobalEmotes7TVResponse = serde_json::from_str(&res)?;
 
     match parsed.len() {
-        0 => return Ok(None),
-        _ => return Ok(Some(parsed.iter().map(|emote| emote.name.to_string()).collect()))
+        0 => Ok(None),
+        _ => Ok(Some(parsed.iter().map(|emote| emote.name.to_string()).collect()))
     }
 }
 
@@ -239,7 +239,7 @@ pub async fn get_bttv_channel_emotes<T: Display>(
     let parsed: models::EmotesBttvResponse = serde_json::from_str(&res)?;
 
     match parsed.channel_emotes.len() + parsed.shared_emotes.len() {
-        0 => return Ok(None),
+        0 => Ok(None),
         _ => return {
             let mut emotes = vec![];
 
@@ -266,8 +266,8 @@ pub async fn get_bttv_global_emotes(
     let parsed: models::GlobalEmotesBttvResponse = serde_json::from_str(&res)?;
 
     match parsed.len() {
-        0 => return Ok(None),
-        _ => return Ok(Some(parsed.iter().map(|emote| emote.code.to_owned()).collect())),
+        0 => Ok(None),
+        _ => Ok(Some(parsed.iter().map(|emote| emote.code.to_owned()).collect())),
     }
 }
 
@@ -288,8 +288,8 @@ pub async fn get_ffz_channel_emotes<T: Display>(
     let parsed: models::EmotesFfzResponse = serde_json::from_str(&res)?;
 
     match parsed.resp.len() {
-        0 => return Ok(None),
-        _ => return Ok(Some(parsed.resp.iter().map(|emote| emote.code.to_owned()).collect())),
+        0 => Ok(None),
+        _ => Ok(Some(parsed.resp.iter().map(|emote| emote.code.to_owned()).collect())),
     }
 }
 
@@ -308,8 +308,8 @@ pub async fn get_ffz_global_emotes(
     let parsed: models::GlobalEmotesFfzResponse = serde_json::from_str(&res)?;
 
     match parsed.len() {
-        0 => return Ok(None),
-        _ => return Ok(Some(parsed.iter().map(|emote| emote.code.to_owned()).collect())),
+        0 => Ok(None),
+        _ => Ok(Some(parsed.iter().map(|emote| emote.code.to_owned()).collect())),
     }
 }
 
@@ -329,8 +329,8 @@ pub async fn get_all_channel_emotes<T: Display>(
     let parsed: models::ChannelEmotesResponse = serde_json::from_str(&res)?;
 
     match parsed.len() {
-        0 => return Ok(None),
-        _ => return Ok(Some(parsed.iter().map(|emote| emote.code.to_owned()).collect())),
+        0 => Ok(None),
+        _ => Ok(Some(parsed.iter().map(|emote| emote.code.to_owned()).collect())),
     }
 }
 
@@ -390,7 +390,7 @@ pub async fn get_weather_report(
     let area = &weather.nearest_area[0].area_name[0].value;
     let country = &weather.nearest_area[0].country[0].value;
 
-    return Ok(Some(format!("Weather in {area}, {country}: {temp}, {humid}, {pressure}, {precip}, {wind}")));
+    Ok(Some(format!("Weather in {area}, {country}: {temp}, {humid}, {pressure}, {precip}, {wind}")))
 }
 
 // query wikipedia for an article gist
@@ -407,8 +407,8 @@ pub async fn query_wikipedia(
         .await?;
 
     match serde_json::from_str(&res) {
-        Ok(w) => return Ok(Some(w)),
-        Err(_) => return Ok(None),
+        Ok(w) =>  Ok(Some(w)),
+        Err(_) => Ok(None),
     }
 }
 
@@ -455,11 +455,11 @@ pub async fn query_urban_dictionary(
     let parsed: models::UrbanDictionaryResponse = serde_json::from_str(&res)?;
 
     match parsed.list.len() {
-        0 => return Ok(None),
+        0 => Ok(None),
         _ => {
             let term    = &parsed.list[0].word;
-            let def     = parsed.list[0].definition.replace("[", "").replace("]", "");
-            let example = parsed.list[0].example.replace("[", "").replace("]", "");
+            let def     = parsed.list[0].definition.replace('[', "").replace(']', "");
+            let example = parsed.list[0].example.replace('[', "").replace(']', "");
             let more_defs_count = match parsed.list.len() {
                 0 => "".to_owned(),
                 _ => format!("({} more definitions)", parsed.list.len() - 1),
@@ -484,7 +484,7 @@ pub async fn upload_to_pastebin(
     ];
 
     let res = client
-        .post(&format!("https://pastebin.com/api/api_post.php"))
+        .post("https://pastebin.com/api/api_post.php")
         .form(&params)
         .send()
         .await?
@@ -505,12 +505,12 @@ pub enum RedditPostRelevancy {
 }
 
 impl RedditPostRelevancy {
-	pub fn new_from_vec(v: &Vec<String>) -> Self {
+	pub fn new_from_vec(v: &[String]) -> Self {
         let options = ["hour", "day", "week", "month", "year", "all", "alltime"];
         let mut relevancy = Self::Week;
 
-        for i in 0..options.len() {
-            if v.contains(&options[i].to_owned()) {
+        for (i, opt) in options.iter().enumerate() {
+            if v.contains(&opt.to_string()) {
                 relevancy = match i {
                     0 => Self::Hour,
                     1 => Self::Day,
@@ -546,12 +546,12 @@ pub enum RedditPostType {
 }
 
 impl RedditPostType {
-	pub fn new_from_vec(v: &Vec<String>) -> Self {
+	pub fn new_from_vec(v: &[String]) -> Self {
         let options = ["upvotes", "random"];
         let mut post_type = Self::Random;
 
-        for i in 0..options.len() {
-            if v.contains(&options[i].to_owned()) {
+        for (i, opt) in options.iter().enumerate() {
+            if v.contains(&opt.to_string()) {
                 post_type = match i {
                     0 => Self::MostUpvotes,
                     1 => Self::Random,
@@ -570,7 +570,7 @@ pub enum AdditionalRedditParameter {
 }
 
 impl AdditionalRedditParameter {
-    pub fn new_from_vec(v: &Vec<String>) -> Vec<Self> {
+    pub fn new_from_vec(v: &[String]) -> Vec<Self> {
         let mut out = Vec::new();
         
         if v.contains(&"media".to_owned()) || v.contains(&"--has-media".to_owned()) {
@@ -636,8 +636,10 @@ pub enum HolyBook {
     Tanakh,
 }
 
-impl HolyBook {
-    pub fn from_str(s: &str) -> anyhow::Result<Self, MyError> {
+impl std::str::FromStr for HolyBook {
+    type Err = MyError;
+
+    fn from_str(s: &str) -> anyhow::Result<Self, Self::Err> {
         match &s.to_lowercase()[..] {
             "quran"  => Ok(Self::Quran),
             "bible"  => Ok(Self::Bible),
@@ -666,14 +668,13 @@ pub async fn get_rand_holy_book_verse(
     let parsed: models::DevotionaliumResponse = serde_json::from_str(&res)?;
 
     match book_kind {
-        HolyBook::Bible  => return Ok(parsed.bible),
-        HolyBook::Tanakh => return Ok(parsed.tanakh),
-        HolyBook::Quran  => return Ok(parsed.quran),
+        HolyBook::Bible  => Ok(parsed.bible),
+        HolyBook::Tanakh => Ok(parsed.tanakh),
+        HolyBook::Quran  => Ok(parsed.quran),
     }
 }
 
 // https://opentdb.com/api_config.php
-
 #[derive(PartialEq)]
 pub enum TriviaCategory {
     Any,
@@ -704,7 +705,7 @@ pub enum TriviaCategory {
 }
 
 impl TriviaCategory {
-    pub fn from_vec(v: &Vec<String>) -> Self {
+    pub fn from_vec(v: &[String]) -> Self {
         let args = v.join(" ").to_lowercase();
         let cats = ["any category", "general knowledge", "board games", "books", "cartoons", "comics", "film", "anime", "music", "musical", "musicals", "theatre", "television", "games", "video games", "science", "cs", "computer science", "gadgets", "math", "mathematics", "mythology", "sport", "sports", "geography", "geo", "history", "politics", "art", "celebrities", "animals", "vehicles"];
 
@@ -801,7 +802,7 @@ pub enum TriviaDifficulty {
 }
 
 impl TriviaDifficulty {
-    pub fn from_vec(v: &Vec<String>) -> Self {
+    pub fn from_vec(v: &[String]) -> Self {
         let args = v.join(" ").to_lowercase();
         let cats = ["any difficulty", "easy", "medium", "hard"];
         
@@ -842,7 +843,7 @@ pub enum TriviaType {
 }
 
 impl TriviaType {
-    pub fn from_vec(v: &Vec<String>) -> Self {
+    pub fn from_vec(v: &[String]) -> Self {
         let args = v.join(" ").to_lowercase();
         let cats = ["any type", "multiple", "true false"];
 
@@ -939,7 +940,7 @@ pub async fn query_generic(
             .filter(|p| p.primary == Some(true))
             .collect();
         
-        if main_pod.len() == 0 {
+        if main_pod.is_empty() {
             return Ok(None);
         }
          

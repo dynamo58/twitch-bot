@@ -13,7 +13,7 @@ pub async fn check_for_offliners(
 	let mut count = 0;
 
 	for channel_name in &config.channels {
-		if let None = api::get_stream_info(&twitch_auth, channel_name).await? {
+		if (api::get_stream_info(twitch_auth, channel_name).await?).is_none() {
 			if let Some(offliners) = api::get_chatters(channel_name).await? {
 				for offliner in &offliners {
 					if config.disregarded_users.contains(&offliner.to_lowercase()) {
@@ -25,26 +25,24 @@ pub async fn check_for_offliners(
 					let mut _channel_id : Option<i32> = None;
 
 					if let Ok(cache) = cache_arc.lock() {
-						match cache.get(offliner) {
-							Some(id) => { _offliner_id = Some(*id); },
-							None     => (), 
-						};
+						if let Some(id) = cache.get(offliner) {
+							_offliner_id = Some(*id);
+						}
 
-						match cache.get(offliner) {
-							Some(id) => { _offliner_id = Some(*id); },
-							None     => (), 
-						};
+						if let Some(id) = cache.get(offliner) {
+							_offliner_id = Some(*id);
+						}
 					}
 
-					if let None = _channel_id {
+					if _channel_id.is_none() {
 						_channel_id = Some(api::id_from_nick(channel_name, twitch_auth).await?.unwrap());
 					}
 
-					if let None = _offliner_id {
+					if _offliner_id.is_none() {
 						_offliner_id = Some(api::id_from_nick(offliner, twitch_auth).await?.unwrap());
 					}
 
-					db::add_offliner_minute(&pool, _channel_id.unwrap(), _offliner_id.unwrap()).await?;
+					db::add_offliner_minute(pool, _channel_id.unwrap(), _offliner_id.unwrap()).await?;
 				}
 			}
 		}

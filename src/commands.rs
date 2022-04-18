@@ -46,51 +46,51 @@ pub async fn handle_command(
 
 	let cmd_out = match cmd.cmd.as_str() {
 		// standard commands
-		"ping"           => ping(&config).await,
+		"ping"           => ping(config).await,
 		"echo"           => echo(&cmd).await,
 		"decide"         => decide(&cmd).await,
 		"math"           => query(&cmd).await,
 		"query"          => query(&cmd).await,
 		"time"           => get_time(&cmd).await,
 		"pasta"          => get_rand_pasta().await,
-		"markov"         => markov(&pool, &cmd).await,
-		"newcmd"         => new_cmd(&pool, &cmd).await,
-		"suggest"        => suggest(&pool, &cmd).await,
+		"markov"         => markov(pool, &cmd).await,
+		"newcmd"         => new_cmd(pool, &cmd).await,
+		"suggest"        => suggest(pool, &cmd).await,
 		"reddit"         => get_reddit_post(&cmd).await,
 		"wiki"           => query_wikipedia(&cmd).await,
 		"define"         => query_dictionary(&cmd).await,
-		"setalias"       => set_alias(&pool, &cmd).await,
+		"setalias"       => set_alias(pool, &cmd).await,
 		"random"         => rand_int_from_range(&cmd).await,
-		"rmalias"        => remove_alias(&pool, &cmd).await,
+		"rmalias"        => remove_alias(pool, &cmd).await,
 		"urban"          => query_urban_dictionary(&cmd).await,
-		"lurk"           => set_lurk_status(&pool, &cmd).await,
-		"explain"        => explain(&pool, &cmd.args[0]).await,
+		"lurk"           => set_lurk_status(pool, &cmd).await,
+		"explain"        => explain(pool, &cmd.args[0]).await,
 		"weather"        => get_weather_report(&cmd.args).await,
-		"uptime"         => get_uptime(&auth, &cmd, cache_arc).await,
-		"accage"         => get_accage(&auth, &cmd, cache_arc).await,
-		"delcmd"         => remove_channel_command(&pool, &cmd).await,
-		"followage"      => get_followage(&cmd, &auth, cache_arc).await,
-		"clearreminders" => clear_reminders(&pool, cmd.sender.id).await,
-		"rmrm"           => clear_reminders(&pool, cmd.sender.id).await,
-		"first"          => first_message(&pool, &auth, cache_arc, &cmd).await,
+		"uptime"         => get_uptime(auth, &cmd, cache_arc).await,
+		"accage"         => get_accage(auth, &cmd, cache_arc).await,
+		"delcmd"         => remove_channel_command(pool, &cmd).await,
+		"followage"      => get_followage(&cmd, auth, cache_arc).await,
+		"clearreminders" => clear_reminders(pool, cmd.sender.id).await,
+		"rmrm"           => clear_reminders(pool, cmd.sender.id).await,
+		"first"          => first_message(pool, auth, cache_arc, &cmd).await,
 		"bible"          => get_rand_holy_book_verse(api::HolyBook::Bible).await,
 		"quran"          => get_rand_holy_book_verse(api::HolyBook::Quran).await,
 		"tanakh"         => get_rand_holy_book_verse(api::HolyBook::Tanakh).await,
-		"offlinetime"    => get_offline_time(&pool, &auth, &cmd, cache_arc).await,
-		"remindme"       => add_reminder(&pool, &auth, cache_arc, &cmd, true).await,
-		"remind"         => add_reminder(&pool, &auth, cache_arc, &cmd, false).await,
-		"giveup"         => give_up_trivia(&cmd, &auth,ongoing_trivia_games_arc).await,
+		"offlinetime"    => get_offline_time(pool, auth, &cmd, cache_arc).await,
+		"remindme"       => add_reminder(pool, auth, cache_arc, &cmd, true).await,
+		"remind"         => add_reminder(pool, auth, cache_arc, &cmd, false).await,
+		"giveup"         => give_up_trivia(&cmd, auth,ongoing_trivia_games_arc).await,
 		"commands"       => get_commands_reference_link(&config.commands_reference_path).await,
-		"wordratio"      => get_word_ratio(&pool, &auth, &cmd, config.prefix, cache_arc).await,
-		"trivia"         => attempt_start_trivia_game(&cmd, &auth, ongoing_trivia_games_arc).await,
+		"wordratio"      => get_word_ratio(pool, auth, &cmd, config.prefix, cache_arc).await,
+		"trivia"         => attempt_start_trivia_game(&cmd, auth, ongoing_trivia_games_arc).await,
 		"rose"           => tag_rand_chatter_with_rose(&cmd.channel.name, &config.disregarded_users).await,
-		"demultiplex"    => demultiplex(&pool, client.clone(), config, &auth, cache_arc, &cmd, ongoing_trivia_games_arc).await,
-		"bench"          => bench_command(&pool, client.clone(), config, &auth, cache_arc, &cmd, ongoing_trivia_games_arc).await,
-		"chatstats"       => get_chatstats(&pool, &cmd, &auth).await,
+		"demultiplex"    => demultiplex(pool, client.clone(), config, auth, cache_arc, &cmd, ongoing_trivia_games_arc).await,
+		"bench"          => bench_command(pool, client.clone(), config, auth, cache_arc, &cmd, ongoing_trivia_games_arc).await,
+		"chatstats"       => get_chatstats(pool, &cmd, auth).await,
 		// special commands
-		"pipe"           => pipe(&pool, client.clone(), config, &auth, cache_arc, &cmd, ongoing_trivia_games_arc).await,
-		""               => execute_alias(&pool, client.clone(), config, &auth, cache_arc, &cmd, ongoing_trivia_games_arc).await,
-		_                => try_execute_channel_command(&pool, &cmd).await,
+		"pipe"           => pipe(pool, client.clone(), config, auth, cache_arc, &cmd, ongoing_trivia_games_arc).await,
+		""               => execute_alias(pool, client.clone(), config, auth, cache_arc, &cmd, ongoing_trivia_games_arc).await,
+		_                => try_execute_channel_command(pool, &cmd).await,
 	};
 
 	let cmd_out = match cmd_out {
@@ -106,7 +106,7 @@ pub async fn handle_command(
 	}
 
 	match db::log_command(
-		&pool,
+		pool,
 		&cmd,
 		now.elapsed(),
 		if let Some(s) = &cmd_out {s} else {""}
@@ -195,7 +195,7 @@ async fn get_accage(
 				return Ok(Some(format!("⏱️ {}'s account is {duration} days old", user.name)));
 			}
 		},
-		None       => return Ok(Some("❌ user not found".into())),
+		None       => Ok(Some("❌ user not found".into())),
 	}
 }
 
@@ -204,7 +204,7 @@ async fn set_alias(
 	pool: &SqlitePool,
 	cmd: &CommandSource,
 ) -> anyhow::Result<Option<String>> {
-	let alias = match &cmd.args.get(0) {
+	let alias = match cmd.args.get(0) {
 		Some(a) => a.clone(),
 		None => return Ok(Some("❌ no alias name provided".into()))
 	};
@@ -229,7 +229,7 @@ async fn execute_alias(
 	cmd: &CommandSource,
 	ongoing_trivia_games_arc: Arc<Mutex<crate::OngoingTriviaGames>>,
 ) -> anyhow::Result<Option<String>> {
-	let alias = match &cmd.args.get(0).clone() {
+	let alias = match cmd.args.get(0) {
 		Some(a) => a.clone(),
 		None => return Ok(Some("❌ missing alias name".into())),
 	};
@@ -237,7 +237,7 @@ async fn execute_alias(
 	let alias_cmd = match db::get_alias_cmd(pool, cmd.sender.id, &alias).await? {
 		Some(alias) => alias
 			.split(' ')
-			.map(|a| a.clone().to_string())
+			.map(|a| a.to_string())
 			.collect::<Vec<String>>(),
 		None => return Ok(Some("❌ alias not recognized".into())),
 	};
@@ -248,12 +248,12 @@ async fn execute_alias(
 			None => return Ok(Some("❌ alias faulty".into())),
 		},
 		args: match alias_cmd.get(1) {
-			Some(_) => alias_cmd[1..].into_iter().map(|x| x.clone().to_string()).collect::<Vec<String>>(),
+			Some(_) => alias_cmd[1..].to_vec(),
 			None => vec![],
 		},
 		channel: cmd.channel.clone(),
 		sender: cmd.sender.clone(),
-		timestamp: cmd.timestamp.clone(),
+		timestamp: cmd.timestamp,
 	};
 
 	handle_command(pool, client, config, auth, cache_arc, new_cmd, false, ongoing_trivia_games_arc.clone()).await;
@@ -272,14 +272,14 @@ async fn remove_alias(
 	};
 
 	match db::remove_alias(pool, cmd.sender.id, &alias).await? {
-		0 => return Ok(Some("❌ no such alias".into())),
-		_ => return Ok(Some("✅ alias removed".into())),
+		0 => Ok(Some("❌ no such alias".into())),
+		_ => Ok(Some("✅ alias removed".into())),
 	}
 }
 
 // parse the incoming duration identifying string
 // expected input: (xh,xm) 
-fn parse_duration_to_hm(s: &String) -> anyhow::Result<(i64, i64)> {
+fn parse_duration_to_hm(s: &str) -> anyhow::Result<(i64, i64)> {
 	let hrs  = s[s.find('(').ok_or(MyError::NotFound)?+1..s.find('h').ok_or(MyError::NotFound)?].to_owned().parse()?;
 	let mins = s[s.find(',').ok_or(MyError::NotFound)?+1..s.find('m').ok_or(MyError::NotFound)?].to_owned().parse()?;
 
@@ -294,7 +294,7 @@ async fn add_reminder(
 	cmd:         &CommandSource,
 	is_for_self: bool,
 ) -> anyhow::Result<Option<String>> {
-	if cmd.args.len() == 0 {
+	if cmd.args.is_empty() {
 		return Ok(Some("❌ insufficient args".into()));
 	}
 
@@ -321,10 +321,9 @@ async fn add_reminder(
 
 	let mut for_user_id: Option<i32> = None;
 	if let Ok(cache) = cache_arc.lock() {
-		match cache.get(to_user_name) {
-			Some(id) => { for_user_id = Some(*id); },
-			None     => (), 
-		};
+		if let Some(id) = cache.get(to_user_name) {
+			for_user_id = Some(*id);
+		}
 	}
 
 	match for_user_id {
@@ -364,9 +363,9 @@ async fn clear_reminders(
 	let delete_count = db::clear_users_sent_reminders(pool, user_id).await?;
 
 	if delete_count == 0 {
-		return Ok(Some("❌ no reminders set, nothing happened".into()));
+		Ok(Some("❌ no reminders set, nothing happened".into()))
 	} else {
-		return Ok(Some(format!("✅ cleared {delete_count} reminders")));
+		Ok(Some(format!("✅ cleared {delete_count} reminders")))
 	}
 }
 
@@ -421,8 +420,8 @@ async fn explain (
 	error_code: &str,
 ) -> anyhow::Result<Option<String>> {
 	match db::get_explanation(pool, error_code).await? {
-		Some(expl) => return Ok(Some(expl)),
-		None => return Ok(Some("❌ no such explanation".into()))
+		Some(expl) => Ok(Some(expl)),
+		None =>       Ok(Some("❌ no such explanation".into()))
 	}
 }
 
@@ -440,8 +439,8 @@ async fn first_message(
 	let message = db::get_first_message(pool, user.id, channel.id).await?;
 
 	match message {
-		Some(msg) => return Ok(Some(msg)),
-		None      => return Ok(Some("❌ nothing found | E2".into())),
+		Some(msg) => Ok(Some(msg)),
+		None      => Ok(Some("❌ nothing found | E2".into())),
 	}
 }
 
@@ -470,7 +469,7 @@ async fn suggest(
 // give a rose to a random chatter in the channel
 async fn tag_rand_chatter_with_rose(
 	channel_name:      &str,
-	disregarded_users: &Vec<String>,
+	disregarded_users: &[String],
 ) -> anyhow::Result<Option<String>> {
 	let chatters = match api::get_chatters(channel_name).await? {
 		Some(chatters) => chatters,
@@ -479,7 +478,7 @@ async fn tag_rand_chatter_with_rose(
 
 	let mut rand_chatter = "".to_string();
 
-	while rand_chatter.len() == 0 {
+	while rand_chatter.is_empty() {
 		let try_rand_chatter = chatters[rand::thread_rng().gen_range(0..chatters.len())].clone();
 	
 		if !disregarded_users.contains(&try_rand_chatter.to_lowercase()) {
@@ -492,17 +491,17 @@ async fn tag_rand_chatter_with_rose(
 
 // get weather report from wttr.in API
 async fn get_weather_report(
-	args: &Vec<String>,
+	args: &[String],
 ) -> anyhow::Result<Option<String>> {
-	if args.len() == 0 {
+	if args.is_empty() {
 		return Ok(Some("❌ no location provided".into()));
 	}
 
 	let location = args.join(" ");
 
 	match api::get_weather_report(&location).await? {
-		Some(r) => return Ok(Some(r)),
-		None    => return Ok(Some("❌ location not identified".into())),
+		Some(r) => Ok(Some(r)),
+		None    => Ok(Some("❌ location not identified".into())),
 	}
 }
 
@@ -530,7 +529,7 @@ async fn get_uptime(
 
 // the language identifiers
 // expected input: (l1,l2) 
-fn parse_langs(s: &String) -> anyhow::Result<(&str, &str)> {
+fn parse_langs(s: &str) -> anyhow::Result<(&str, &str)> {
 	Ok((
 		&s[s.find('(').ok_or(MyError::NotFound)?+1..s.find(',').ok_or(MyError::NotFound)?],
 		&s[s.find(',').ok_or(MyError::NotFound)?+1..s.find(')').ok_or(MyError::NotFound)?],
@@ -568,12 +567,12 @@ async fn bench_command(
 			None => return Ok(Some("❌ no command provided".into())),
 		},
 		args: match cmd.args.get(1) {
-			Some(_) => cmd.args[1..].into_iter().map(|x| x.clone().to_string()).collect::<Vec<String>>(),
+			Some(_) => cmd.args[1..].to_vec(),
 			None => vec![],
 		},
 		channel: cmd.channel.clone(),
 		sender: cmd.sender.clone(),
-		timestamp: cmd.timestamp.clone(),
+		timestamp: cmd.timestamp,
 	};
 
 	let now = Instant::now();
@@ -605,10 +604,10 @@ async fn query_wikipedia(
 
 	match api::query_wikipedia(title).await? {
 		Some(mut w) => {
-			for (_, page) in w.query.pages.iter_mut() {
+			if let Some((_, page)) = w.query.pages.iter_mut().next() {
 				let abs = page
 					.extract
-					.split(".").collect::<Vec<&str>>()[0];
+					.split('.').collect::<Vec<&str>>()[0];
 
 				return Ok(Some(abs.to_owned()));
 			}
@@ -721,10 +720,10 @@ pub async fn try_execute_channel_command(
 
 	let (cmd_type, cmd_expr, cmd_meta) = match db::get_channel_cmd(pool, cmd.channel.id, cmd_name).await? {
 		Some(cmd) => cmd,
-		None => return Ok(Some("❌ command not recognized".into())),
+		None => return Ok(None),
 	};
 
-	let mut out = cmd_expr.clone();
+	let mut out = cmd_expr;
 
 	if (cmd_type == "templ") {
 		for i in 0..cmd.args.len() {
@@ -756,8 +755,8 @@ pub async fn remove_channel_command(
 	};
 
 	match db::remove_channel_command(pool, cmd.channel.id, cmd_name).await? {
-		0 => return Ok(Some("❌ no such command existed".into())),
-		_ => return Ok(Some("✅ removed successfully".into())),
+		0 => Ok(Some("❌ no such command existed".into())),
+		_ => Ok(Some("✅ removed successfully".into())),
 	}
 }
 
@@ -798,11 +797,11 @@ async fn decide(
 	cmd: &CommandSource,
 ) -> anyhow::Result<Option<String>> {
 	match cmd.args.len() {
-		0 => return Ok(Some("❌ no options provided".into())),
+		0 => Ok(Some("❌ no options provided".into())),
 		_ => {
 			let options: Vec<String> = cmd.args
 				.join(" ")
-				.split(",")
+				.split(',')
 				.map(|a| a.to_owned())
 				.collect();
 			
@@ -811,7 +810,7 @@ async fn decide(
 						.gen_range(0..options.len())
 			].clone();
 
-			return Ok(Some(format!("🎱 I choose... {rand_opt}")));
+			Ok(Some(format!("🎱 I choose... {rand_opt}")))
 		}
 	}
 }
@@ -832,7 +831,7 @@ async fn pipe(
 	// execute them one by one
 	let commands: Vec<String> = cmd.args
 		.join(" ")
-		.split("|")
+		.split('|')
 		.map(|a| a.trim().to_owned())
 		.collect();
 
@@ -841,11 +840,11 @@ async fn pipe(
 	}
 
 	let mut temp_output = String::new();
-	for i in 0..commands.len() {
-		let trimmed_cmd: Vec<String> = commands[i]
+	for (i, _cmd) in commands.iter().enumerate() {
+		let trimmed_cmd: Vec<String> = _cmd
 			.trim()
 			.to_string()
-			.split(" ")
+			.split(' ')
 			.map(|a| a.to_owned())
 			.collect();
 
@@ -855,21 +854,21 @@ async fn pipe(
 				None    => return Ok(Some(format!("❌ {}th pipe faulty", i+1))),
 			},
 			args: match trimmed_cmd.get(1) {
-				Some(_) => trimmed_cmd[1..].into_iter().map(|x| x.clone().to_string()).collect::<Vec<String>>(),
+				Some(_) => trimmed_cmd[1..].to_vec(),
 				None    => vec![],
 			},
 			channel:   cmd.channel.clone(),
 			sender:    cmd.sender.clone(),
-			timestamp: cmd.timestamp.clone(),
+			timestamp: cmd.timestamp,
 		};
 
 		// these are some special ad hoc commands
 		// that may only be used in pipes
-		match commands[i].as_str() {
+		match _cmd.as_str() {
 			"pastebin"  => { temp_output = api::upload_to_pastebin(&temp_output).await?; continue },
 			"lower"     => { temp_output = temp_output.to_lowercase()                  ; continue },
 			"upper"     => { temp_output = temp_output.to_uppercase()                  ; continue },
-			"stdout"    => { temp_output = temp_output                                 ; continue },
+			"stdout"    => {                                                           ; continue },
 			"/dev/null" => { temp_output = "".to_string()                              ; continue },
 			"devnull"   => { temp_output = "".to_owned()                               ; continue },
 			// "pm"        => { temp_output = format!("/w {} {temp_output}", cmd.sender.name); continue },
@@ -929,7 +928,7 @@ async fn get_reddit_post(
 					)
 					.collect();
 				
-				if posts.len() == 0 {
+				if posts.is_empty() {
 					return Ok(Some(format!("❌ no post containing media in selection \'{}\'", relevancy.as_str())));
 				}
 			}
@@ -1009,14 +1008,15 @@ pub async fn attempt_start_trivia_game(
 	let question  = api::fetch_trivia_question(cat, dif, typ).await?;
 
 	if let Ok(mut cache) = ongoing_trivia_games_arc.lock() {
-		if let Some(_) = (*cache).get(&channel_id.to_string()) {
+		if (*cache).get(&channel_id.to_string()).is_some() {
 			return Ok(Some("❌ there is currently a game going on!".into()));
 		}
 
 		(*cache).insert(channel_id.to_string(), convert_from_html_entities(question.correct_answer));
-		return Ok(Some(format!("{}", convert_from_html_entities(question.question))));
+
+		Ok(Some(convert_from_html_entities(question.question)))
 	} else {
-		return Ok(Some("An internal error has occured".into()));
+		Ok(Some("An internal error has occured".into()))
 	}
 }
 
@@ -1038,7 +1038,7 @@ pub async fn give_up_trivia(
 		return Ok(Some("❌ there was no game going on LUL".into()));
 	}
 	
-	return Ok(Some("An internal error has occured".into()));
+	Ok(Some("An internal error has occured".into()))
 }
 
 // get an answer to "any" question
@@ -1100,12 +1100,12 @@ pub async fn demultiplex(
 			None => return Ok(Some("❌ alias faulty".into())),
 		},
 		args: match new_args.get(1) {
-			Some(_) => new_args[1..].into_iter().map(|x| x.clone().to_string()).collect::<Vec<String>>(),
+			Some(_) => new_args[1..].to_vec(),
 			None => vec![],
 		},
 		channel: cmd.channel.clone(),
 		sender: cmd.sender.clone(),
-		timestamp: cmd.timestamp.clone(),
+		timestamp: cmd.timestamp,
 	};
 
 	let mut final_output = String::new();
@@ -1161,7 +1161,7 @@ pub async fn rand_int_from_range(
 		.gen_range(min..=max)
 		.to_string();
 
-	Ok(Some(format!("{number}")))
+	Ok(Some(number))
 }
 
 #[allow(non_ascii_idents)]
@@ -1179,7 +1179,7 @@ pub async fn get_rand_pasta()
 
 	Ok(Some((&rand_pasta[..]).to_owned()))
 }
-
+use std::str::FromStr;
 // get the chat statistics of a channel
 pub async fn get_chatstats(
 	pool:        &SqlitePool,
@@ -1193,23 +1193,22 @@ pub async fn get_chatstats(
 
 			(period, mode)
 		},
-
 		1 => {
-			let period = db::ChatStatPeriod::from_str(&cmd.args[0]);
+			let period = db::ChatStatPeriod::from_str(&cmd.args[0]).unwrap();
 			let mode   = db::ChatStatsMode::Top(3);
 
 			(period, mode)
 		}
 		_ => {
-			let period = db::ChatStatPeriod::from_str(&cmd.args[0]);
-			let mode   = db::ChatStatsMode::from_cmd(&cmd, twitch_auth).await?;
+			let period = db::ChatStatPeriod::from_str(&cmd.args[0]).unwrap();
+			let mode   = db::ChatStatsMode::from_cmd(cmd, twitch_auth).await?;
 
 			(period, mode)
 		}
 	};
 
 	if let db::ChatStatPeriod::ThisStream = period {
-		if !api::streamer_is_live(&twitch_auth, &cmd.channel.name).await? {
+		if !api::streamer_is_live(twitch_auth, &cmd.channel.name).await? {
 			return Ok(Some("❌ streamer is not live".into()))
 		}
 	}

@@ -133,7 +133,7 @@ impl CommandSource {
 	// parse new from twitch_irc::message::PrivmsgMessage
 	pub fn from_privmsg(privmsg: twitch_irc::message::PrivmsgMessage) -> Self {
 		let mut args: Vec<String> = privmsg.message_text
-			.split(" ")
+			.split(' ')
 			.map(|arg| arg.to_owned())
 			.collect();
 		let cmd = args[0].to_lowercase()[1..].to_owned();
@@ -175,9 +175,9 @@ impl CommandSource {
 		};
 
 		Self {
-			cmd: cmd,
-			args: args,
-			sender: sender,
+			cmd,
+			args,
+			sender,
 			channel: Channel {
 				name: privmsg.source.params[0][1..].to_owned(),
 				id: privmsg.channel_id.parse::<i32>().unwrap(),
@@ -216,16 +216,15 @@ impl CommandSource {
 				let mut user_id: Option<i32> = None;
 
 				if let Ok(cache) = name_id_cache_arc.lock() {
-					match cache.get(&user_name) {
-						Some(id) => { user_id = Some(*id); },
-						None     => (), 
-					};
+					if let Some(id) = cache.get(&user_name) {
+						user_id = Some(*id);
+					}
 				}
 
-				if let None = user_id {
-					user_id = Some(api::id_from_nick(&user_name, &twitch_auth)
+				if user_id.is_none() {
+					user_id = Some(api::id_from_nick(&user_name, twitch_auth)
 						.await.ok().ok_or(UserChannelParseError::Unknown)?
-						.ok_or(UserChannelParseError::UserNotFound(user_name.clone()))?); 
+						.ok_or_else(|| UserChannelParseError::UserNotFound(user_name.clone()))?); 
 				}
 				
 				let user = Channel {
@@ -248,27 +247,27 @@ impl CommandSource {
 				let mut channel_id: Option<i32> = None;
 				
 				if let Ok(cache) = name_id_cache_arc.lock() {
-					match cache.get(&user_name) {
-						Some(id) => { user_id = Some(*id); },
-						None     => (), 
+					if let Some(id) = cache.get(&user_name) {
+						user_id = Some(*id);
 					}
 
-					match cache.get(&channel_name) {
-						Some(id) => { channel_id = Some(*id); },
-						None     => (), 
+					if let Some(id) = cache.get(&channel_name) {
+						channel_id = Some(*id);
 					}
 				}
 				
-				if let None = user_id {
-					user_id = Some(api::id_from_nick(&user_name, &twitch_auth)
+				if user_id.is_none() {
+					user_id = Some(api::id_from_nick(&user_name, twitch_auth)
 						.await.ok().ok_or(UserChannelParseError::Unknown)?
-						.ok_or(UserChannelParseError::UserNotFound(user_name.clone()))?);
+						.ok_or_else(|| UserChannelParseError::UserNotFound(user_name.clone()))?);
 				}
 
-				if let None = channel_id {
-					channel_id = Some(api::id_from_nick(&channel_name, &twitch_auth)
-						.await.ok().ok_or(UserChannelParseError::Unknown)?
-						.ok_or(UserChannelParseError::ChannelNotFound(channel_name.clone()))?);
+				if channel_id.is_none() {
+					channel_id = Some(api::id_from_nick(&channel_name, twitch_auth)
+						.await
+						.ok()
+						.ok_or(UserChannelParseError::Unknown)?
+						.ok_or_else(|| UserChannelParseError::ChannelNotFound(channel_name.clone()))?);
 				}
 
 				let user = Channel {
@@ -322,7 +321,7 @@ impl EmoteCache {
 		let mut globals: Vec<String> = vec![];
 		
 		for channel_name in &config.channels {
-			let channel_id = api::id_from_nick(channel_name, &auth)
+			let channel_id = api::id_from_nick(channel_name, auth)
 				.await?
 				.ok_or(MyError::NotFound)?;
 			
@@ -358,7 +357,7 @@ impl EmoteCache {
 	pub fn self_or_privmsg_has_emote(
 		&self,
 		privmsg:      &PrivmsgMessage,
-		emote_name:   &String,
+		emote_name:   &str,
 	) -> bool {
 		let channel_name = &privmsg.source.params[0][1..];
 		let channel_emotes = match self.channels.get(channel_name) {
@@ -366,8 +365,8 @@ impl EmoteCache {
 			None => return false,
 		};
 
-		channel_emotes.contains(emote_name) ||
-		self.globals.contains(emote_name) ||
+		channel_emotes.contains(&emote_name.to_owned()) ||
+		self.globals.contains(&emote_name.to_owned()) ||
 		privmsg.emotes
 			.iter()
 			.map(|emote| emote.code.to_owned())
@@ -380,7 +379,7 @@ impl EmoteCache {
 		config: &Config,
 		auth: &TwitchAuth,
 	) -> anyhow::Result<()> {
-		match Self::init(&config, &auth).await {
+		match Self::init(config, auth).await {
 			Ok(new_cache) => {
 				self.channels = new_cache.channels;
 				self.globals = new_cache.globals;
@@ -418,43 +417,43 @@ pub fn convert_from_html_entities(s: String) -> String {
 
 pub fn convert_to_html_encoding(s: String) -> String {
 	s
-		.replace("%",  "%25") // this one has to be always first!
-		.replace(" ",  "%20")
-		.replace("&",  "%26")
-		.replace("'",  "%27")
-		.replace("(",  "%28")
-		.replace(")",  "%29")
-        .replace("/",  "%2F")
-		.replace("*",  "%2A")
-		.replace("+",  "%2B")
-		.replace(",",  "%2C")
-		.replace("-",  "%2D")
-		.replace(".",  "%2E")
-		.replace("/",  "%2F")
-		.replace(":",  "%3A")
-		.replace("<",  "%3C")
-		.replace("=",  "%3D")
-		.replace(">",  "%3E")
-		.replace("?",  "%3F")
-		.replace("@",  "%40")
-		.replace("[",  "%5B")
-		.replace("\\", "%5C")
-		.replace("]",  "%5D")
-		.replace("^",  "%5E")
-		.replace("_",  "%5F")
-		.replace("`",  "%60")
-		.replace("{",  "%7B")
-		.replace("|",  "%7C")
-		.replace("}",  "%7D")
-		.replace("~",  "%7E")
-		.replace("€",  "%E2%82%AC")
-		.replace("‚",  "%E2%80%9A")
-		.replace("„",  "%E2%80%9E")
-		.replace("ˆ",  "%CB%86")
-		.replace("‘",  "%E2%80%98")
-		.replace("’",  "%E2%80%99")
-		.replace("“",  "%E2%80%9C")
-		.replace("”",  "%E2%80%9D")
+		.replace('%',  "%25") // this one has to be always first!
+		.replace(' ',  "%20")
+		.replace('&',  "%26")
+		.replace('\'',  "%27")
+		.replace('(',  "%28")
+		.replace(')',  "%29")
+        .replace('/',  "%2F")
+		.replace('*',  "%2A")
+		.replace('+',  "%2B")
+		.replace(',',  "%2C")
+		.replace('-',  "%2D")
+		.replace('.',  "%2E")
+		.replace('/',  "%2F")
+		.replace(':',  "%3A")
+		.replace('<',  "%3C")
+		.replace('=',  "%3D")
+		.replace('>',  "%3E")
+		.replace('?',  "%3F")
+		.replace('@',  "%40")
+		.replace('[',  "%5B")
+		.replace('\\', "%5C")
+		.replace(']',  "%5D")
+		.replace('^',  "%5E")
+		.replace('_',  "%5F")
+		.replace('`',  "%60")
+		.replace('{',  "%7B")
+		.replace('|',  "%7C")
+		.replace('}',  "%7D")
+		.replace('~',  "%7E")
+		.replace('€',  "%E2%82%AC")
+		.replace('‚',  "%E2%80%9A")
+		.replace('„',  "%E2%80%9E")
+		.replace('ˆ',  "%CB%86")
+		.replace('‘',  "%E2%80%98")
+		.replace('’',  "%E2%80%99")
+		.replace('“',  "%E2%80%9C")
+		.replace('”',  "%E2%80%9D")
 }
 
 pub type OngoingTriviaGames = HashMap<String, String>; 
