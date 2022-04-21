@@ -590,7 +590,7 @@ pub async fn get_reddit_posts(
     let client = Client::new();
 
     let res = client
-        .get(&format!("https://www.reddit.com/r/{subreddit}/top.json?t=${relevancy_str}"))
+        .get(&format!("https://www.reddit.com/r/{subreddit}/top.json?limit=30&t=${relevancy_str}"))
         .send()
         .await?
         .text()

@@ -80,6 +80,7 @@ pub async fn handle_command(
 		"remindme"       => add_reminder(pool, auth, cache_arc, &cmd, true).await,
 		"remind"         => add_reminder(pool, auth, cache_arc, &cmd, false).await,
 		"giveup"         => give_up_trivia(&cmd, auth,ongoing_trivia_games_arc).await,
+		"hint"           => give_trivia_hint(&cmd, auth, ongoing_trivia_games_arc).await,
 		"commands"       => get_commands_reference_link(&config.commands_reference_path).await,
 		"wordratio"      => get_word_ratio(pool, auth, &cmd, config.prefix, cache_arc).await,
 		"trivia"         => attempt_start_trivia_game(&cmd, auth, ongoing_trivia_games_arc).await,
@@ -805,9 +806,25 @@ async fn decide(
 				.map(|a| a.to_owned())
 				.collect();
 			
+			// if the text user sent doesn't have any 'or's, then
+			// try to see if the message starts with 'is' or 'does'
+			// if so, process it as a yes/no
+			if options.is_empty() {
+				match cmd.args[0].get(..2).to_lowercase().as_str() {
+					"is"   => (),
+					"does" => (),
+					_ => return Ok(Some("❌ prompt not recognized".into()))
+				}
+
+				match rand::thread_rng().gen_range(0..2) {
+					0 => return Ok(Some("No".into())),
+					_ => return Ok(Some("Yes".into())),
+				}
+
+			}
+
 			let rand_opt = options[
-					rand::thread_rng()
-						.gen_range(0..options.len())
+				rand::thread_rng().gen_range(0..options.len())
 			].clone();
 
 			Ok(Some(format!("🎱 I choose... {rand_opt}")))
@@ -1005,14 +1022,29 @@ pub async fn attempt_start_trivia_game(
 	let dif = api::TriviaDifficulty::from_vec(&cmd.args);
 	let typ = api::TriviaType::from_vec(&cmd.args);
 	
-	let question  = api::fetch_trivia_question(cat, dif, typ).await?;
+	let question = api::fetch_trivia_question(cat, dif, typ).await?;
+	let fmt_answer = {
+		let question        = convert_from_html_entities(question.question);
+		let correct_answer  = convert_from_html_entities(question.correct_answer);
+		let wrong_answers   = question
+			.incorrect_answers
+			.iter()
+			.map(|a| convert_from_html_entities(a))
+			.collect::<Vec<String>>();
+
+		crate::TriviaAnswer {
+			correct_answer,
+			wrong_answers,
+		}
+	}
+
 
 	if let Ok(mut cache) = ongoing_trivia_games_arc.lock() {
 		if (*cache).get(&channel_id.to_string()).is_some() {
 			return Ok(Some("❌ there is currently a game going on!".into()));
 		}
 
-		(*cache).insert(channel_id.to_string(), convert_from_html_entities(question.correct_answer));
+		(*cache).insert(channel_id.to_string(), fmt_answer.clone());
 
 		Ok(Some(convert_from_html_entities(question.question)))
 	} else {
@@ -1230,4 +1262,24 @@ pub async fn get_chatstats(
 	}
 
 	Ok(Some(out))
+}
+
+async fn give_trivia_hint(
+	cmd:                      &CommandSource,
+	twitch_auth:              &TwitchAuth,
+	ongoing_trivia_games_arc: Arc<Mutex<OngoingTriviaGames>>,
+) -> anyhow::Result<Option<String>> {
+	let channel_id = cmd.channel.id;
+
+	if let Ok(mut cache) = ongoing_trivia_games_arc.lock() {
+		if let Some(correct_answer) = (*cache).get(&channel_id.to_string()) {
+			let c = correct_answer.clone();
+			(*cache).remove(&channel_id.to_string());
+			return Ok(Some(format!("So bad LUL | The answer was \'{c}\'")));
+		}
+		
+		return Ok(Some("❌ there was no game going on LUL".into()));
+	}
+	
+	Ok(Some("An internal error has occured".into()))
 }

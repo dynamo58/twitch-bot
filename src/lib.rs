@@ -456,7 +456,19 @@ pub fn convert_to_html_encoding(s: String) -> String {
 		.replace('”',  "%E2%80%9D")
 }
 
-pub type OngoingTriviaGames = HashMap<String, String>; 
+pub struct TriviaGameInfo {
+	question: String,
+	correct_answer: String,
+	wrong_answers:  Vec<String>,
+}
+
+impl TriviaGame {
+	pub fn from_api_object(s: crate::api_models::TriviaQuestion) -> Self {
+		todo!()
+	}
+}
+
+pub type OngoingTriviaGames = HashMap<String, TriviaAnswer>; 
 
 // format a duration into a string
 #[allow(non_snake_case)]
@@ -484,23 +496,29 @@ pub fn fmt_duration(dur: chrono::Duration, long_format: bool) -> String {
 	let YEARS   = if long_format { " years"   } else { "y" };
 	let mut out = String::new();
 
+	let mut out_len: u8 = 0;
+
 	if yrs > 0.0 {
 		out.push_str(&format!("{yrs}{YEARS}, "));
+		out_len += 1;
 	}
 
 	if dys > 0.0 {
 		out.push_str(&format!("{dys}{DAYS}, "));
+		out_len += 1;
 	}
 
-	if hrs > 0.0 {
+	if (hrs > 0.0) && (out_len <= 2) {
 		out.push_str(&format!("{hrs}{HOURS}, "));
+		out_len += 1;
 	}
 
-	if mns > 0.0 {
+	if (mns > 0.0) && (out_len <= 2) {
 		out.push_str(&format!("{mns}{MINUTES}, "));
+		out_len += 1;
 	}
 
-	if scs > 0 {
+	if (scs > 0) && (out_len <= 0) {
 		out.push_str(&format!("{scs}{SECONDS}, "));
 	}
 

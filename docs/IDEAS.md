@@ -12,11 +12,6 @@
 
 - investigate ways of making the bot comply with the concept of **continuous integration**
 
-
 ## Command ideas
 
-- show chat statistics; could be like:
-    - alltime messages
-    - user with most messages since start of stream
-    - ...
 - last seen
