@@ -800,16 +800,24 @@ async fn decide(
 	match cmd.args.len() {
 		0 => Ok(Some("❌ no options provided".into())),
 		_ => {
-			let options: Vec<String> = cmd.args
+			let mut options: Vec<String> = cmd.args
 				.join(" ")
 				.split(',')
 				.map(|a| a.to_owned())
 				.collect();
 			
+			if options.len() == 1 {
+				options = cmd.args
+				.join(" ")
+				.split("or")
+				.map(|a| a.to_owned())
+				.collect();
+			}
+
 			// if the text user sent doesn't have any 'or's, then
 			// try to see if the message starts with 'is' or 'does'
 			// if so, process it as a yes/no
-			if options.is_empty() {
+			if options.is_empty() || options.len() == 1 {
 				match cmd.args[0].to_lowercase().as_str() {
 					"is"   => (),
 					"does" => (),
@@ -817,8 +825,8 @@ async fn decide(
 				}
 
 				match rand::thread_rng().gen_range(0..2) {
-					0 => return Ok(Some("No".into())),
-					_ => return Ok(Some("Yes".into())),
+					0 => return Ok(Some("🎱 No, I don't think so".into())),
+					_ => return Ok(Some("🎱 Yes, I do think so".into())),
 				}
 			}
 
@@ -1253,9 +1261,7 @@ pub async fn get_chatstats(
 		let user_id = stat.0;
 		let count = stat.1;
 
-		let user_name = api::name_from_id(twitch_auth, user_id)
-			.await?
-			.unwrap();
+		let user_name = api::nick_from_id(user_id, twitch_auth).await?;
 
 		out.push_str(&format!(" {place}. {user_name} ({count})"));
 		place += 1;

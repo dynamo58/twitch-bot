@@ -137,12 +137,6 @@ pub struct User {
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct EmotesFfzResponse {
-    pub resp: Vec<Resp>,
-}
-
-#[derive(Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct Resp {
     pub code: String,
 }
 

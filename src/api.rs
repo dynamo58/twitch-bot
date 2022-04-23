@@ -18,20 +18,16 @@ pub async fn get_twitch_user(
     nick: &str,
     auth: &TwitchAuth,
 ) -> anyhow::Result<models::UsersResponse> {
-    let client = Client::new();
-
-    let res = client
+    let info: models::UsersResponse = Client::new()
         .get(&format!("https://api.twitch.tv/helix/users?login={nick}"))
         .header("Client-ID", auth.client_id.clone())
         .header("Authorization", format!("Bearer {}", auth.oauth.clone()))
         .send()
         .await?
-        .text()
+        .json()
         .await?;
 
-    let parsed: models::UsersResponse = serde_json::from_str(&res)?;
-
-    Ok(parsed)
+    Ok(info)
 }
 
 pub async fn id_from_nick(
@@ -41,29 +37,6 @@ pub async fn id_from_nick(
     match get_twitch_user(nick, auth).await?.data.get(0) {
         Some(data) => Ok(Some(data.id.parse::<i32>().unwrap())),
         None       => Ok(None),
-    }
-}
-
-pub async fn name_from_id(
-    twitch_auth: &TwitchAuth,
-    user_id: i32,
-) -> anyhow::Result<Option<String>> {
-    let client = Client::new();
-
-    let res = client
-        .get(&format!("https://api.twitch.tv/helix/users?id={user_id}"))
-        .header("Client-ID", twitch_auth.client_id.clone())
-        .header("Authorization", format!("Bearer {}", twitch_auth.oauth.clone()))
-        .send()
-        .await?
-        .text()
-        .await?;
-
-    let parsed: models::UsersResponse = serde_json::from_str(&res)?;
-
-    match parsed.data.len() {
-        0 => Ok(None),
-        _ => Ok(Some(parsed.data[0].display_name.clone()))
     }
 }
 
@@ -81,51 +54,40 @@ pub async fn get_acc_creation_date(
 // ref: https://dev.twitch.tv/docs/api/reference#get-users
 pub async fn nick_from_id(
     user_id: i32,
-    auth: TwitchAuth,
+    auth:    &TwitchAuth,
 ) -> anyhow::Result<String> {
-    let client = Client::new();
-
-    let res = client
+    let res: models::UsersResponse = Client::new()
         .get(&format!("https://api.twitch.tv/helix/users?id={user_id}"))
         .header("Client-ID", auth.client_id.clone())
         .header("Authorization", format!("Bearer {}", auth.oauth.clone()))
         .send()
         .await?
-        .text()
+        .json()
         .await?;
 
-    let parsed: models::UsersResponse = serde_json::from_str(&res)?;
-    let nick = &parsed.data[0].login;
-
-    Ok(nick.to_owned())
+    Ok(res.data[0].login.clone())
 }
 
 // gets all viewers present in a twitch stream
 pub async fn get_chatters(
     channel_name: &str,
 ) -> anyhow::Result<Option<Vec<String>>> {
-    let client = Client::new();
-
-    let res = client
+    let mut res: models::ChattersResponse = Client::new()
         .get(&format!("https://tmi.twitch.tv/group/user/{channel_name}/chatters"))
         .send()
         .await?
-        .text()
+        .json()
         .await?;
 
-    let mut parsed: models::ChattersResponse = serde_json::from_str(&res)?;
     let mut chatters = vec![];
     
-    // there must be a better way to do this?
-    // ... none come to mind
-
-    chatters.append(&mut parsed.chatters.broadcaster);
-    chatters.append(&mut parsed.chatters.vips);
-    chatters.append(&mut parsed.chatters.moderators);
-    chatters.append(&mut parsed.chatters.staff);
-    chatters.append(&mut parsed.chatters.admins);
-    chatters.append(&mut parsed.chatters.global_mods);
-    chatters.append(&mut parsed.chatters.viewers);
+    chatters.append(&mut res.chatters.broadcaster);
+    chatters.append(&mut res.chatters.vips);
+    chatters.append(&mut res.chatters.moderators);
+    chatters.append(&mut res.chatters.staff);
+    chatters.append(&mut res.chatters.admins);
+    chatters.append(&mut res.chatters.global_mods);
+    chatters.append(&mut res.chatters.viewers);
 
     match chatters.len() {
         0 => Ok(None),
@@ -139,22 +101,18 @@ pub async fn get_stream_info(
     auth: &TwitchAuth,
     channel_name: &str,
 ) -> anyhow::Result<Option<models::StreamsResponse>> {
-    let client = Client::new();
-
-    let res = client
+    let res: models::StreamsResponse = Client::new()
         .get(&format!("https://api.twitch.tv/helix/streams?user_login={channel_name}"))
         .header("Client-ID", auth.client_id.clone())
         .header("Authorization", format!("Bearer {}", auth.oauth.clone()))
         .send()
         .await?
-        .text()
+        .json()
         .await?;
 
-    let info: models::StreamsResponse = serde_json::from_str(&res)?;
-
-    match info.data.len() {
+    match res.data.len() {
         0 => Ok(None),
-        _ => Ok(Some(info))
+        _ => Ok(Some(res))
     }
 }
 
@@ -163,22 +121,9 @@ pub async fn streamer_is_live(
     auth: &TwitchAuth,
     channel_name: &str,
 ) -> anyhow::Result<bool> {
-    let client = Client::new();
-
-    let res = client
-        .get(&format!("https://api.twitch.tv/helix/streams?user_login={channel_name}"))
-        .header("Client-ID", auth.client_id.clone())
-        .header("Authorization", format!("Bearer {}", auth.oauth.clone()))
-        .send()
-        .await?
-        .text()
-        .await?;
-
-    let info: models::StreamsResponse = serde_json::from_str(&res)?;
-
-    match info.data.len() {
-        0 => Ok(false),
-        _ => Ok(true)
+    match get_stream_info(auth, channel_name).await? {
+        Some(_) => Ok(true),
+        None    => Ok(false),
     }
 }
 
@@ -186,40 +131,32 @@ pub async fn streamer_is_live(
 pub async fn get_7tv_channel_emotes(
     channel_name: &str,
 ) -> anyhow::Result<Option<Vec<String>>> {
-    let client = Client::new();
-
-    let res = client
+    let res: models::Emotes7TVResponse = Client::new()
         .get(&format!("https://api.7tv.app/v2/users/{channel_name}/emotes"))
         .send()
         .await?
-        .text()
+        .json()
         .await?;
 
-    let parsed: models::Emotes7TVResponse = serde_json::from_str(&res)?;
-
-    match parsed.len() {
+    match res.len() {
         0 => Ok(None),
-        _ => Ok(Some(parsed.iter().map(|emote| emote.name.to_string()).collect()))
+        _ => Ok(Some(res.iter().map(|emote| emote.name.to_string()).collect()))
     }
 }
 
 // fetches all 7tv global
 pub async fn get_7tv_global_emotes(
 ) -> anyhow::Result<Option<Vec<String>>> {
-    let client = Client::new();
-
-    let res = client
+    let res: models::GlobalEmotes7TVResponse = Client::new()
         .get("https://api.7tv.app/v2/emotes/global")
         .send()
         .await?
-        .text()
+        .json()
         .await?;
 
-    let parsed: models::GlobalEmotes7TVResponse = serde_json::from_str(&res)?;
-
-    match parsed.len() {
+    match res.len() {
         0 => Ok(None),
-        _ => Ok(Some(parsed.iter().map(|emote| emote.name.to_string()).collect()))
+        _ => Ok(Some(res.iter().map(|emote| emote.name.to_string()).collect()))
     }
 }
 
@@ -227,24 +164,20 @@ pub async fn get_7tv_global_emotes(
 pub async fn get_bttv_channel_emotes<T: Display>(
     channel_id: T,
 ) -> anyhow::Result<Option<Vec<String>>> {
-    let client = Client::new();
-
-    let res = client
+    let res: models::EmotesBttvResponse = Client::new()
         .get(&format!("https://api.betterttv.net/3/cached/users/twitch/{channel_id}"))
         .send()
         .await?
-        .text()
+        .json()
         .await?;
 
-    let parsed: models::EmotesBttvResponse = serde_json::from_str(&res)?;
-
-    match parsed.channel_emotes.len() + parsed.shared_emotes.len() {
+    match res.channel_emotes.len() + res.shared_emotes.len() {
         0 => Ok(None),
         _ => return {
             let mut emotes = vec![];
 
-            parsed.channel_emotes.iter().for_each(|emote| emotes.push(emote.code.to_owned()));
-            parsed.shared_emotes.iter().for_each(|emote| emotes.push(emote.code.to_owned()));
+            res.channel_emotes.iter().for_each(|emote| emotes.push(emote.code.to_owned()));
+            res.shared_emotes.iter().for_each(|emote| emotes.push(emote.code.to_owned()));
 
             Ok(Some(emotes))
         }
@@ -254,20 +187,16 @@ pub async fn get_bttv_channel_emotes<T: Display>(
 // fetches all bttv global emotes
 pub async fn get_bttv_global_emotes(
 ) -> anyhow::Result<Option<Vec<String>>> {
-    let client = Client::new();
-
-    let res = client
+    let res: models::GlobalEmotesBttvResponse  = Client::new()
         .get("https://api.betterttv.net/3/cached/emotes/global")
         .send()
         .await?
-        .text()
+        .json()
         .await?;
 
-    let parsed: models::GlobalEmotesBttvResponse = serde_json::from_str(&res)?;
-
-    match parsed.len() {
+    match res.len() {
         0 => Ok(None),
-        _ => Ok(Some(parsed.iter().map(|emote| emote.code.to_owned()).collect())),
+        _ => Ok(Some(res.iter().map(|emote| emote.code.to_owned()).collect())),
     }
 }
 
@@ -275,41 +204,32 @@ pub async fn get_bttv_global_emotes(
 pub async fn get_ffz_channel_emotes<T: Display>(
     channel_id: T,
 ) -> anyhow::Result<Option<Vec<String>>> {
-    let client = Client::new();
-
-    let res = client
+    let res: Vec<models::EmotesFfzResponse> = Client::new()
         .get(&format!("https://api.betterttv.net/3/cached/frankerfacez/users/twitch/{channel_id}"))
         .send()
         .await?
-        .text()
+        .json()
         .await?;
 
-    let res = format!("{{\"resp\": {res}}}");
-    let parsed: models::EmotesFfzResponse = serde_json::from_str(&res)?;
-
-    match parsed.resp.len() {
+    match res.len() {
         0 => Ok(None),
-        _ => Ok(Some(parsed.resp.iter().map(|emote| emote.code.to_owned()).collect())),
+        _ => Ok(Some(res.iter().map(|emote| emote.code.to_owned()).collect())),
     }
 }
 
 // fetches all ffz global emotes
 pub async fn get_ffz_global_emotes(
 ) -> anyhow::Result<Option<Vec<String>>> {
-    let client = Client::new();
-
-    let res = client
+    let res: models::GlobalEmotesFfzResponse = Client::new()
         .get("https://api.betterttv.net/3/cached/frankerfacez/emotes/global")
         .send()
         .await?
-        .text()
+        .json()
         .await?;
 
-    let parsed: models::GlobalEmotesFfzResponse = serde_json::from_str(&res)?;
-
-    match parsed.len() {
+    match res.len() {
         0 => Ok(None),
-        _ => Ok(Some(parsed.iter().map(|emote| emote.code.to_owned()).collect())),
+        _ => Ok(Some(res.iter().map(|emote| emote.code.to_owned()).collect())),
     }
 }
 
@@ -317,20 +237,16 @@ pub async fn get_ffz_global_emotes(
 pub async fn get_all_channel_emotes<T: Display>(
     channel_id: T
 ) -> anyhow::Result<Option<Vec<String>>> {
-    let client = Client::new();
-
-    let res = client
+    let res: models::ChannelEmotesResponse = Client::new()
         .get(&format!("https://emotes.adamcy.pl/v1/channel/{channel_id}/emotes/all"))
         .send()
         .await?
-        .text()
+        .json()
         .await?;
 
-    let parsed: models::ChannelEmotesResponse = serde_json::from_str(&res)?;
-
-    match parsed.len() {
+    match res.len() {
         0 => Ok(None),
-        _ => Ok(Some(parsed.iter().map(|emote| emote.code.to_owned()).collect())),
+        _ => Ok(Some(res.iter().map(|emote| emote.code.to_owned()).collect())),
     }
 }
 
@@ -341,22 +257,18 @@ pub async fn get_followage(
     channel_id: i32,
     user_id: i32
 ) -> anyhow::Result<Option<DateTime<Utc>>> {
-    let client = Client::new();
-
-    let res = client
+    let res: models::TwitchFollowResponse = Client::new()
         .get(&format!("https://api.twitch.tv/helix/users/follows?to_id={channel_id}&from_id={user_id}"))
         .header("Client-ID", auth.client_id.clone())
         .header("Authorization", format!("Bearer {}", auth.oauth.clone()))
         .send()
         .await?
-        .text()
+        .json()
         .await?;
 
-    let parsed: models::TwitchFollowResponse = serde_json::from_str(&res)?;
-
-    match parsed.total {
+    match res.total {
         0 => Ok(None),
-        _ => Ok(Some(parsed.data[0].followed_at)),
+        _ => Ok(Some(res.data[0].followed_at)),
     }
 }
 
@@ -368,16 +280,13 @@ pub async fn get_followage(
 pub async fn get_weather_report(
     location: &str,
 ) -> anyhow::Result<Option<String>> {
-    let client = Client::new();
-
-    let res = client
+    let weather: models::WttrInResponse = Client::new()
         .get(&format!("https://wttr.in/{location}?format=j1"))
         .send()
         .await?
-        .text()
+        .json()
         .await?;
 
-    let weather: models::WttrInResponse = serde_json::from_str(&res)?;
     let dir = &weather.current_condition[0].winddir16point;
 
     let temp     = format!("🌡️ {}°C", weather.current_condition[0].temp_c);
@@ -397,16 +306,14 @@ pub async fn get_weather_report(
 pub async fn query_wikipedia(
     phrase: &str,
 ) -> anyhow::Result<Option<models::WikiResponse>> {
-    let client = Client::new();
-
-    let res = client
+    let res = Client::new()
         .get(&format!("https://en.wikipedia.org/w/api.php?action=query&titles={phrase}&prop=extracts&format=json&exintro=1&exsectionformat=plain&explaintext=1"))
         .send()
         .await?
-        .text()
-        .await?;
+        .json::<models::WikiResponse>()
+        .await;
 
-    match serde_json::from_str(&res) {
+    match res {
         Ok(w) =>  Ok(Some(w)),
         Err(_) => Ok(None),
     }
@@ -416,25 +323,24 @@ pub async fn query_wikipedia(
 pub async fn query_dictionary(
     word: &str,
 ) -> anyhow::Result<Option<String>> {
-    let client = Client::new();
-
-    let res = client
+    let res = Client::new()
         .get(&format!("https://api.dictionaryapi.dev/api/v2/entries/en/{word}"))
         .send()
         .await?
-        .text()
-        .await?;
+        .json::<models::DictionaryResponse>()
+        .await;
 
-    let parsed: models::DictionaryResponse = match serde_json::from_str(&res) {
-        Ok(tr) => tr,
+
+    let res = match res {
+        Ok(a) => a,
         Err(_) => return Ok(None),
     };
 
-    let pronunciation = match &parsed[0].phonetic {
+    let pronunciation = match &res[0].phonetic {
         Some(p) => p,
         None    => "",
     };
-    let definition = &parsed[0].meanings[0].definitions[0].definition;
+    let definition = &res[0].meanings[0].definitions[0].definition;
 
     Ok(Some(format!("{pronunciation} {definition}")))
 }
@@ -443,26 +349,22 @@ pub async fn query_dictionary(
 pub async fn query_urban_dictionary(
     term: &str,
 ) -> anyhow::Result<Option<String>> {
-    let client = Client::new();
-
-    let res = client
+    let res: models::UrbanDictionaryResponse = Client::new()
         .get(&format!("https://api.urbandictionary.com/v0/define?term={term}"))
         .send()
         .await?
-        .text()
+        .json()
         .await?;
 
-    let parsed: models::UrbanDictionaryResponse = serde_json::from_str(&res)?;
-
-    match parsed.list.len() {
+    match res.list.len() {
         0 => Ok(None),
         _ => {
-            let term    = &parsed.list[0].word;
-            let def     = parsed.list[0].definition.replace('[', "").replace(']', "");
-            let example = parsed.list[0].example.replace('[', "").replace(']', "");
-            let more_defs_count = match parsed.list.len() {
+            let term    = &res.list[0].word;
+            let def     = res.list[0].definition.replace('[', "").replace(']', "");
+            let example = res.list[0].example.replace('[', "").replace(']', "");
+            let more_defs_count = match res.list.len() {
                 0 => "".to_owned(),
-                _ => format!("({} more definitions)", parsed.list.len() - 1),
+                _ => format!("({} more definitions)", res.list.len() - 1),
             };
 
             return Ok(Some(format!("{term} - {def} | Example: {example} {more_defs_count}")));
@@ -474,8 +376,6 @@ pub async fn query_urban_dictionary(
 pub async fn upload_to_pastebin(
     text: &str,
 ) -> anyhow::Result<String> {
-    let client = Client::new();
-
     let params = [
         ("api_dev_key"          , &std::env::var("PASTEBIN_API_KEY")?[..]),
         ("api_paste_expire_date", "1D"                                   ),
@@ -483,7 +383,7 @@ pub async fn upload_to_pastebin(
         ("api_option"           , "paste"                                ),
     ];
 
-    let res = client
+    let res = Client::new()
         .post("https://pastebin.com/api/api_post.php")
         .form(&params)
         .send()
@@ -581,15 +481,14 @@ impl AdditionalRedditParameter {
     }
 }
 
+// get reddit posts from a sub
 pub async fn get_reddit_posts(
     subreddit:  &str,
     relevancy:  &RedditPostRelevancy,
 ) -> anyhow::Result<models::SubredditResponse> {
     let relevancy_str = relevancy.as_str();
 
-    let client = Client::new();
-
-    let res = client
+    let res = Client::new()
         .get(&format!("https://www.reddit.com/r/{subreddit}/top.json?limit=30&t=${relevancy_str}"))
         .send()
         .await?
@@ -605,29 +504,27 @@ pub async fn get_time(
     location: &str
 ) -> anyhow::Result<Option<String>> {
     let api_key = &std::env::var("IPGEOLOCATION_API_KEY")?[..];
-    let client = Client::new();
-
-    let res = client
+    let res = Client::new()
         .get(&format!("https://api.ipgeolocation.io/timezone?apiKey={api_key}&location={location}"))
         .send()
         .await?
-        .text()
-        .await?;
+        .json::<models::IPGeolocationResponse>()
+        .await;
     
-    let parsed: models::IPGeolocationResponse = match serde_json::from_str(&res) {
+    let res = match res {
         Ok(p) => p,
         Err(_) => return Ok(None),
     };
 
     let gmt_offset = {
-        if parsed.is_dst {
-            format!("GMT+{}", parsed.timezone_offset_with_dst)
+        if res.is_dst {
+            format!("GMT+{}", res.timezone_offset_with_dst)
         } else {
-            format!("GMT+{}", parsed.timezone_offset)
+            format!("GMT+{}", res.timezone_offset)
         }
     };
 
-    Ok(Some(format!("{}, (timezone {} {gmt_offset})", parsed.date_time, parsed.timezone)))
+    Ok(Some(format!("{}, (timezone {} {gmt_offset})", res.date_time, res.timezone)))
 }
 
 pub enum HolyBook {
@@ -649,28 +546,25 @@ impl std::str::FromStr for HolyBook {
     }
 }
 
+// get a random verse from tanakh / bible / quran (curr devotionalium.com api)
 pub async fn get_rand_holy_book_verse(
     book_kind: HolyBook,
 ) -> anyhow::Result<models::HolyBook> {
-    let client = Client::new();
-
     let rand_year : u16 = rand::thread_rng().gen_range(1000..2023);
     let rand_month: u16 = rand::thread_rng().gen_range(1..13);
     let rand_day  : u16 = rand::thread_rng().gen_range(1..29);
 
-    let res = client
+    let res: models::DevotionaliumResponse = Client::new()
         .get(&format!("https://devotionalium.com/api/v2?date={rand_year}-{rand_month}-{rand_day}"))
         .send()
         .await?
-        .text()
+        .json()
         .await?;
     
-    let parsed: models::DevotionaliumResponse = serde_json::from_str(&res)?;
-
     match book_kind {
-        HolyBook::Bible  => Ok(parsed.bible),
-        HolyBook::Tanakh => Ok(parsed.tanakh),
-        HolyBook::Quran  => Ok(parsed.quran),
+        HolyBook::Bible  => Ok(res.bible),
+        HolyBook::Tanakh => Ok(res.tanakh),
+        HolyBook::Quran  => Ok(res.quran),
     }
 }
 
@@ -873,6 +767,7 @@ impl TriviaType {
     }
 }
 
+// get a trivia question from opentdb
 pub async fn fetch_trivia_question(
     cat:   TriviaCategory,
     diff:  TriviaDifficulty,
@@ -900,38 +795,31 @@ pub async fn fetch_trivia_question(
         }
     };
 
-    let client = Client::new();
-
-    let res = client
+    let res: models::TriviaResponse = Client::new()
         .get(&format!("https://opentdb.com/api.php?amount=1{cat}{diff}{ttype}"))
         .send()
         .await?
-        .text()
+        .json()
         .await?;
     
-    let parsed: models::TriviaResponse = serde_json::from_str(&res)?;
-
-    Ok(parsed.results[0].clone())
+    Ok(res.results[0].clone())
 }
 
+// query a question (currently WolframAlpha)
 pub async fn query_generic(
     query: &str,
 ) -> anyhow::Result<Option<String>> {
-    let client = Client::new();
-
     let formatted_query = crate::convert_to_html_encoding(query.to_owned());
     let appid = &std::env::var("WOLFRAMALPHA_APPID")?[..];
 
-    let res = client
+    let res: models::WolframAlphaResponse = Client::new()
         .get(&format!("http://api.wolframalpha.com/v2/query?input={formatted_query}&appid={appid}&output=json"))
         .send()
         .await?
-        .text()
+        .json()
         .await?;
-    
-    let parsed: models::WolframAlphaResponse = serde_json::from_str(&res)?;
 
-    if let Some(pods) = parsed.queryresult.pods {
+    if let Some(pods) = res.queryresult.pods {
         let main_pod: Vec<models::Pod> = pods
             .into_iter()    
             .filter(|p| p.primary == Some(true))
@@ -950,21 +838,17 @@ pub async fn query_generic(
     Ok(None)
 }
 
+// get information about a github repository
 pub async fn get_github_repo_info(
     url: &str,
 ) -> anyhow::Result<models::GitHubRepoResponse> {
-    let client = Client::new();
-
-    let res = client
+    // yes, it has to be wrapped like this
+    Ok(Client::new()
         .get(url)
         .header("Accept", "application/vnd.github.v3+json")
         .header("User-Agent", "dynamo58")
         .send()
         .await?
-        .text()
-        .await?;
-    
-    let parsed: models::GitHubRepoResponse = serde_json::from_str(&res)?;
-
-    Ok(parsed)
+        .json::<models::GitHubRepoResponse>()
+        .await?)
 }
