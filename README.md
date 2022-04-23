@@ -3,11 +3,13 @@
 Lovcen (/lôːʋtɕen/) is a sophisticated [Twitch.tv](https://www.twitch.tv) chat bot made in Rust.
 
 ## Underlying technologies
+
 - Rust
 	- twitch-irc
 		- used as a twitch irc client
 	- sqlx
-		- used as a SQLite database driver
+		- used as an SQLite database driver
+	- ... \[and a bunch of others... view [Cargo.toml](Cargo.toml) for further information\]
 
 # Commands
 
@@ -60,7 +62,8 @@ Lovcen (/lôːʋtɕen/) is a sophisticated [Twitch.tv](https://www.twitch.tv) ch
 # Run yourself
 
 1. `git clone https://github.com/dynamo58/twitch-bot`
-2. rename `.env.example` to `.env` and enter your information (you can get it [here](https://chatterino.com/client_login))
+2. rename `.env.example` to `.env` and enter your information for the different APIs
+	- in fact, you only really need the Twitch info, but if you do not provide the other ones, quite a lot of commands will simply not work (see list below of all the APIs and their utilization)
 3. tweak your config in `assets/config.json`
 4. create a blank `db.db` file in the root
 5. everything set up, you can do `cargo run` or something
@@ -74,9 +77,9 @@ This bot is heavily inspired by other Twitch bots, takes some of their features 
 This bot also uses various third-party APIs, those include (but may not be limited to)
 - [Twitch API](https://dev.twitch.tv/docs/api/); obviously
 - [OpenTDB](https://opentdb.com/) for querying trivia questions
-- [ipgeolocation]() for timezone api (no link because shows IP xd)
+- [ipgeolocation]() for timezone api [no link here because site may and will show personal information]
 - [Pastebin](https://pastebin.com/) dumping data on demand
-- [wttr.in]() to query weather information (no link because may show location)
+- [wttr.in]() to query weather information [no link because may and will show location]
 - [Devotionalium](https://devotionalium.com/web) to query verses of books
 - [Reddit](https://www.reddit.com/) to query Reddit posts
 - [Urban Dictionary](https://www.urbandictionary.com/) to query Urban dictionary posts
