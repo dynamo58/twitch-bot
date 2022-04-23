@@ -722,7 +722,6 @@ impl TriviaCategory {
         // this is rather stupid but no other way to do it i guess
         // and not bored enough to do an ad hoc macro
         match cat_idx {
-            0  => Self::Any,
             1  => Self::GeneralKnowledge,
             2  => Self::EntertainmentBoardGames,
             3  => Self::EntertainmentBooks,
@@ -817,7 +816,6 @@ impl TriviaDifficulty {
         }
 
         match cat_idx {
-            0 => Self::Any,
             1 => Self::Easy,
             2 => Self::Medium,
             3 => Self::Hard,
@@ -848,7 +846,7 @@ impl TriviaType {
         let cats = ["any type", "multiple", "true false"];
 
         // the default index
-        let mut cat_idx = 0;
+        let mut cat_idx = 1;
 
         for cat in &cats {
             if args.contains(cat) {
@@ -861,9 +859,8 @@ impl TriviaType {
         // and not bored enough to do an ad hoc macro
         match cat_idx {
             0 => Self::Any,
-            1 => Self::Multiple,
             2 => Self::TrueFalse,
-            _ => Self::Any,
+            _ => Self::Multiple,
         }
     }
 

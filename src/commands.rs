@@ -660,13 +660,13 @@ async fn get_followage(
 
 	match api::get_followage(twitch_auth, channel.id, user.id).await? {
 		Some(date) => {
-			let duration = (Utc::now() - date).num_days();
-			let years = duration as f32 / 365.2425;
+			let duration = Utc::now() - date;
+			let years = duration.num_days() as f32 / 365.2425;
 
 			if years > 0.5 {
 				return Ok(Some(format!("⏱️ {} has been following {} for {years:.2} years", user.name, channel.name)));
 			} else {
-				return Ok(Some(format!("⏱️ {} has been following {} for {duration} days", user.name, channel.name)));
+				return Ok(Some(format!("⏱️ {} has been following {} for {}", user.name, channel.name, fmt_duration(duration, false))));
 			}
 		},
 		None       => return Ok(Some(format!("❌ {} does not follow {}", user.name, channel.name))),
@@ -810,7 +810,7 @@ async fn decide(
 			// try to see if the message starts with 'is' or 'does'
 			// if so, process it as a yes/no
 			if options.is_empty() {
-				match cmd.args[0].get(..2).to_lowercase().as_str() {
+				match cmd.args[0].to_lowercase().as_str() {
 					"is"   => (),
 					"does" => (),
 					_ => return Ok(Some("❌ prompt not recognized".into()))
@@ -820,7 +820,6 @@ async fn decide(
 					0 => return Ok(Some("No".into())),
 					_ => return Ok(Some("Yes".into())),
 				}
-
 			}
 
 			let rand_opt = options[
@@ -1024,19 +1023,20 @@ pub async fn attempt_start_trivia_game(
 	
 	let question = api::fetch_trivia_question(cat, dif, typ).await?;
 	let fmt_answer = {
-		let question        = convert_from_html_entities(question.question);
-		let correct_answer  = convert_from_html_entities(question.correct_answer);
-		let wrong_answers   = question
+		let q = convert_from_html_entities(question.question);
+		let c = convert_from_html_entities(question.correct_answer);
+		let w = question
 			.incorrect_answers
 			.iter()
-			.map(|a| convert_from_html_entities(a))
+			.map(|a| convert_from_html_entities(a.to_owned()))
 			.collect::<Vec<String>>();
 
-		crate::TriviaAnswer {
-			correct_answer,
-			wrong_answers,
+		crate::TriviaGameInfo {
+			question:       q,
+			correct_answer: c,
+			wrong_answers:  w,
 		}
-	}
+	};
 
 
 	if let Ok(mut cache) = ongoing_trivia_games_arc.lock() {
@@ -1046,7 +1046,7 @@ pub async fn attempt_start_trivia_game(
 
 		(*cache).insert(channel_id.to_string(), fmt_answer.clone());
 
-		Ok(Some(convert_from_html_entities(question.question)))
+		Ok(Some(convert_from_html_entities(fmt_answer.question)))
 	} else {
 		Ok(Some("An internal error has occured".into()))
 	}
@@ -1061,10 +1061,10 @@ pub async fn give_up_trivia(
 	let channel_id = cmd.channel.id;
 
 	if let Ok(mut cache) = ongoing_trivia_games_arc.lock() {
-		if let Some(correct_answer) = (*cache).get(&channel_id.to_string()) {
-			let c = correct_answer.clone();
+		if let Some(trivia_info) = (*cache).get(&channel_id.to_string()) {
+			let c = trivia_info.clone();
 			(*cache).remove(&channel_id.to_string());
-			return Ok(Some(format!("So bad LUL | The answer was \'{c}\'")));
+			return Ok(Some(format!("So bad LUL | The answer was \'{}\'", c.correct_answer)));
 		}
 		
 		return Ok(Some("❌ there was no game going on LUL".into()));
@@ -1267,18 +1267,22 @@ pub async fn get_chatstats(
 async fn give_trivia_hint(
 	cmd:                      &CommandSource,
 	twitch_auth:              &TwitchAuth,
-	ongoing_trivia_games_arc: Arc<Mutex<OngoingTriviaGames>>,
+	ongoing_trivia_games_arc: Arc<Mutex<crate::OngoingTriviaGames>>,
 ) -> anyhow::Result<Option<String>> {
 	let channel_id = cmd.channel.id;
 
 	if let Ok(mut cache) = ongoing_trivia_games_arc.lock() {
-		if let Some(correct_answer) = (*cache).get(&channel_id.to_string()) {
-			let c = correct_answer.clone();
-			(*cache).remove(&channel_id.to_string());
-			return Ok(Some(format!("So bad LUL | The answer was \'{c}\'")));
+		if let Some(trivia_info) = (*cache).get(&channel_id.to_string()) {
+			let c = trivia_info
+				.shuffled_answers()
+				.iter()
+				.map(|a| a.to_string())
+				.collect::<Vec<String>>()
+				.join("\", \"");
+			return Ok(Some(format!("The options are: \"{}\"", c)));
 		}
-		
-		return Ok(Some("❌ there was no game going on LUL".into()));
+
+		return Ok(Some("❌ there is no game going on FeelsDankMan".into()));
 	}
 	
 	Ok(Some("An internal error has occured".into()))

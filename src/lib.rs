@@ -3,14 +3,16 @@ pub mod db;
 pub mod api;
 pub mod api_models;
 pub mod background;
+pub mod constants;
 
 use std::{collections::HashMap, fs::read_to_string};
 use std::sync::{Arc, Mutex};
 use std::path::Path;
-
+use constants::*;
 
 use colored::*;
 use chrono::{DateTime, Utc};
+use rand::seq::SliceRandom;
 use serde::{Serialize, Deserialize};
 use thiserror::Error;
 use twitch_irc::message::PrivmsgMessage;
@@ -413,6 +415,7 @@ pub fn convert_from_html_entities(s: String) -> String {
 		.replace("&rsquo;", "’")
 		.replace("&hellip;", "…")
 		.replace("&rdquo;", "”")
+		.replace("&pi;", "π")
 }
 
 pub fn convert_to_html_encoding(s: String) -> String {
@@ -456,19 +459,36 @@ pub fn convert_to_html_encoding(s: String) -> String {
 		.replace('”',  "%E2%80%9D")
 }
 
+#[derive(Clone)]
 pub struct TriviaGameInfo {
-	question: String,
-	correct_answer: String,
-	wrong_answers:  Vec<String>,
+	pub question: String,
+	pub correct_answer: String,
+	pub wrong_answers:  Vec<String>,
 }
 
-impl TriviaGame {
+impl TriviaGameInfo {
 	pub fn from_api_object(s: crate::api_models::TriviaQuestion) -> Self {
-		todo!()
+		Self {
+			question: s.question,
+			correct_answer: s.correct_answer,
+			wrong_answers: s.incorrect_answers
+		}
+	}
+
+	pub fn shuffled_answers(&self) -> Vec<&String> {
+		let mut answers = vec![
+			&self.correct_answer,
+			&self.wrong_answers[0],
+			&self.wrong_answers[1],
+			&self.wrong_answers[2],
+		];
+
+		answers.shuffle(&mut rand::thread_rng());
+		answers
 	}
 }
 
-pub type OngoingTriviaGames = HashMap<String, TriviaAnswer>; 
+pub type OngoingTriviaGames = HashMap<String, TriviaGameInfo>; 
 
 // format a duration into a string
 #[allow(non_snake_case)]
@@ -477,11 +497,6 @@ pub fn fmt_duration(dur: chrono::Duration, long_format: bool) -> String {
 	if num_sec == 0.0 {
 		return "no time".into();
 	}
-
-	let SECONDS_IN_YEAR   = 31556952.0;
-	let SECONDS_IN_DAY    = 86400.0;
-	let SECONDS_IN_HOUR   = 3600.0;
-	let SECONDS_IN_MINUTE = 60.0;
 	
 	let yrs = (num_sec / SECONDS_IN_YEAR).floor();
 	let dys = ((num_sec - (yrs * SECONDS_IN_YEAR)) / SECONDS_IN_DAY).floor();
@@ -518,7 +533,7 @@ pub fn fmt_duration(dur: chrono::Duration, long_format: bool) -> String {
 		out_len += 1;
 	}
 
-	if (scs > 0) && (out_len <= 0) {
+	if (scs > 0) && (out_len <= 2) {
 		out.push_str(&format!("{scs}{SECONDS}, "));
 	}
 

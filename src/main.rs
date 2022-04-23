@@ -17,6 +17,7 @@ use twitch_bot::{
 	OngoingTriviaGames,
 	convert_from_html_entities,
 	convert_to_html_encoding,
+	TriviaGameInfo,
 };
 use background as bg;
 use commands::handle_command;
@@ -241,8 +242,8 @@ async fn main() -> anyhow::Result<()> {
 						if let Some(Some(room_id)) = channel_id {
 							let mut correct = false;
 							if let Ok(mut cache) = ongoing_trivia_games_arc.lock() {
-								if let Some(correct_answer) = (*cache).get(room_id) {
-									if correct_answer.to_lowercase() == privmsg.message_text.to_lowercase() {
+								if let Some(trivia_info) = (*cache).get(room_id) {
+									if trivia_info.correct_answer.to_lowercase() == privmsg.message_text.to_lowercase() {
 										(*cache).remove(room_id);
 										correct = true;
 									}
