@@ -9,7 +9,7 @@ Lovcen (/lôːʋtɕen/) is a sophisticated [Twitch.tv](https://www.twitch.tv) ch
 		- used as a twitch irc client
 	- sqlx
 		- used as an SQLite database driver
-	- ... \[and a bunch of others... view [Cargo.toml](Cargo.toml) for further information\]
+	- \[and a bunch of others... view [Cargo.toml](Cargo.toml) for further information\]
 
 # Commands
 
