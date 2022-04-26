@@ -49,6 +49,7 @@ pub async fn handle_command(
 		"ping"           => ping(config).await,
 		"echo"           => echo(&cmd).await,
 		"decide"         => decide(&cmd).await,
+		"8ball"         => decide(&cmd).await,
 		"math"           => query(&cmd).await,
 		"query"          => query(&cmd).await,
 		"time"           => get_time(&cmd).await,
@@ -819,8 +820,11 @@ async fn decide(
 			// if so, process it as a yes/no
 			if options.is_empty() || options.len() == 1 {
 				match cmd.args[0].to_lowercase().as_str() {
-					"is"   => (),
-					"does" => (),
+					"is"     => (),
+					"does"   => (),
+					"will"   => (),
+					"should" => (),
+					"do"     => (),
 					_ => return Ok(Some("❌ prompt not recognized".into()))
 				}
 
