@@ -13,5 +13,3 @@
 - investigate ways of making the bot comply with the concept of **continuous integration**
 
 ## Command ideas
-
-- last seen

@@ -46,27 +46,29 @@ pub async fn handle_command(
 
 	let cmd_out = match cmd.cmd.as_str() {
 		// standard commands
-		"ping"           => ping(config).await,
 		"echo"           => echo(&cmd).await,
-		"decide"         => decide(&cmd).await,
-		"8ball"         => decide(&cmd).await,
-		"math"           => query(&cmd).await,
 		"query"          => query(&cmd).await,
+		"math"           => query(&cmd).await,
+		"ping"           => ping(config).await,
+		"decide"         => decide(&cmd).await,
+		"8ball"          => decide(&cmd).await,
 		"time"           => get_time(&cmd).await,
 		"pasta"          => get_rand_pasta().await,
 		"markov"         => markov(pool, &cmd).await,
 		"newcmd"         => new_cmd(pool, &cmd).await,
 		"suggest"        => suggest(pool, &cmd).await,
+		"ls"             => find_last_seen(&cmd, auth, config).await,
 		"reddit"         => get_reddit_post(&cmd).await,
 		"wiki"           => query_wikipedia(&cmd).await,
-		"define"         => query_dictionary(&cmd).await,
 		"setalias"       => set_alias(pool, &cmd).await,
-		"random"         => rand_int_from_range(&cmd).await,
+		"define"         => query_dictionary(&cmd).await,
 		"rmalias"        => remove_alias(pool, &cmd).await,
-		"urban"          => query_urban_dictionary(&cmd).await,
+		"random"         => rand_int_from_range(&cmd).await,
 		"lurk"           => set_lurk_status(pool, &cmd).await,
 		"explain"        => explain(pool, &cmd.args[0]).await,
+		"urban"          => query_urban_dictionary(&cmd).await,
 		"weather"        => get_weather_report(&cmd.args).await,
+		"chatstats"      => get_chatstats(pool, &cmd, auth).await,
 		"uptime"         => get_uptime(auth, &cmd, cache_arc).await,
 		"accage"         => get_accage(auth, &cmd, cache_arc).await,
 		"delcmd"         => remove_channel_command(pool, &cmd).await,
@@ -82,13 +84,12 @@ pub async fn handle_command(
 		"remind"         => add_reminder(pool, auth, cache_arc, &cmd, false).await,
 		"giveup"         => give_up_trivia(&cmd, auth,ongoing_trivia_games_arc).await,
 		"hint"           => give_trivia_hint(&cmd, auth, ongoing_trivia_games_arc).await,
-		"commands"       => get_commands_reference_link(&config.commands_reference_path).await,
 		"wordratio"      => get_word_ratio(pool, auth, &cmd, config.prefix, cache_arc).await,
+		"commands"       => get_commands_reference_link(&config.commands_reference_path).await,
 		"trivia"         => attempt_start_trivia_game(&cmd, auth, ongoing_trivia_games_arc).await,
 		"rose"           => tag_rand_chatter_with_rose(&cmd.channel.name, &config.disregarded_users).await,
 		"demultiplex"    => demultiplex(pool, client.clone(), config, auth, cache_arc, &cmd, ongoing_trivia_games_arc).await,
 		"bench"          => bench_command(pool, client.clone(), config, auth, cache_arc, &cmd, ongoing_trivia_games_arc).await,
-		"chatstats"       => get_chatstats(pool, &cmd, auth).await,
 		// special commands
 		"pipe"           => pipe(pool, client.clone(), config, auth, cache_arc, &cmd, ongoing_trivia_games_arc).await,
 		""               => execute_alias(pool, client.clone(), config, auth, cache_arc, &cmd, ongoing_trivia_games_arc).await,
@@ -1295,5 +1296,46 @@ async fn give_trivia_hint(
 		return Ok(Some("❌ there is no game going on FeelsDankMan".into()));
 	}
 	
-	Ok(Some("An internal error has occured".into()))
+	Ok(Some("❌ an internal error has occured".into()))
+}
+
+// find when and where was specified user last seen
+pub fn find_last_seen(
+	cmd:         &CommandSource,
+	twitch_auth: &TwitchAuth,
+	config:      &Config
+) -> anyhow::Result<Option<String>> {
+	let (target_user_name, target_user_id) = match cmd.args.len() {
+		0 => return Ok(Some("❌ provide a user that you want to find".into())),
+		_ => {
+			let user_name = &cmd.args[0];
+			let user_id = api::id_from_nick(user_name, twitch_auth).await?;
+
+			match user_id {
+				Some(id) => (user_name, id)
+				None     => return Ok(Some(format!("❌ user \'{user_name}\' doesn't exist found")))
+			}
+		}
+	}
+
+	let mut latest_timestamp: Option<DateTime> = None;
+	let mut found_in_channel: Option<String>   = None;
+	for channel_name in config.channels {
+		let channel_id = api::id_from_nick(channel_name, twitch_auth).await?;
+		let latest = db::latest_message_date(channel_id, target_user_id).await?;
+
+		if Some(timestamp) = latest {
+			if timestamp > latest_timestamp {
+				latest_timestamp = Some(timestamp);
+				found_in_channel = Some(channel_name.clone());
+			}
+		}
+	}
+	
+	let duration = fmt_duration(Utc::now() - latest_timestamp, false)
+
+	match latest_timestamp {
+		Some(tm) => Ok(Some(format!("⌛ {target_user_name} was last seen {duration} in {found_in_channel}"))),
+		None     => Ok(Some(format!("❌ {target_user_name} not found in records"))),
+	}
 }

@@ -31,6 +31,8 @@ Lovcen (/lôːʋtɕen/) is a sophisticated [Twitch.tv](https://www.twitch.tv) ch
 | first          | [nick: opt(str)] [channel: opt(str)]                                       | get the first logged message of a user (in any channel)            | None
 | followage      | [user: opt(str)] [channel: opt(str)]                                       | get the amount of time a user has been following a channel         | None
 | giveup         | None                                                                       | give up the current trivia question                                | None
+| lastseen       | [user: str]                                                                | alias for the `ls` command                                         | None
+| ls             | [user: str]                                                                | find when and where was specified user last seen                   | None
 | lurk           | None                                                                       | go into lurk mode (gets removed upon next message)                 | None
 | markov         | [start: str] [count: int]                                                  | responds with a markov chain generated from saved chat messages    | None
 | math           | [expression: text]                                                         | alias for the `query` command                                      | None
@@ -57,7 +59,6 @@ Lovcen (/lôːʋtɕen/) is a sophisticated [Twitch.tv](https://www.twitch.tv) ch
 | weather        | [location: text]                                                           | get weather report from specified location                         | None
 | wiki           | [phrase: text]                                                             | tries to query Wikipedia for searched topic/title                  | None
 | wordratio      | [user: opt(str)] [word: str]                                               | get the ratio of messages of a user that contain certain word      | None
-
 
 # Run yourself
 

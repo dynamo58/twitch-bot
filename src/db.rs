@@ -983,3 +983,33 @@ pub async fn get_channel_chat_stats(
 		
 	Ok(rows)
 } 
+
+pub async fn latest_message_date(
+	channel_id:     i32,
+	target_user_id: i32
+) -> anyhow::Result<Option<DateTime>> {
+	let mut conn = pool.acquire().await?;
+
+	let sql = r#"
+		SELECT
+			timestamp
+		FROM
+			CHANNEL_{{ CHANNEL_ID }}
+		WHERE
+			sender_id=$1
+		ORDER BY
+			timestamp DESC
+		LIMIT
+			1;
+	"#.replace("{{ CHANNEL_ID }}", &channel_id.to_string());
+
+	let timestamps = sqlx::query_as::<Sqlite, DateTimeQR>(&sql)
+		.bind(target_user_id)
+		.fetch_all(&mut *conn)
+		.await?;
+
+	match timestamps.get(0) {
+		0 => Ok(None),
+		_ => Ok(Some(timestamp))
+	}
+}
