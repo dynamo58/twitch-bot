@@ -57,7 +57,7 @@ pub async fn handle_command(
 		"markov"         => markov(pool, &cmd).await,
 		"newcmd"         => new_cmd(pool, &cmd).await,
 		"suggest"        => suggest(pool, &cmd).await,
-		"ls"             => find_last_seen(&cmd, auth, config).await,
+		"ls"             => find_last_seen(pool, &cmd, auth, config).await,
 		"reddit"         => get_reddit_post(&cmd).await,
 		"wiki"           => query_wikipedia(&cmd).await,
 		"setalias"       => set_alias(pool, &cmd).await,
@@ -679,11 +679,7 @@ async fn new_cmd(
 	pool: &SqlitePool,
 	cmd:  &CommandSource,
 ) -> anyhow::Result<Option<String>> {
-	if !(
-		cmd.sender.statuses.contains(&TwitchBadge::Broadcaster) ||
-		cmd.sender.statuses.contains(&TwitchBadge::Mod)         ||
-		cmd.sender.statuses.contains(&TwitchBadge::Vip)
-	) {
+	if !cmd.sender.is_mvb() {
 		return Ok(Some("❌ not high enough status".into()));
 	}
 
@@ -1300,7 +1296,8 @@ async fn give_trivia_hint(
 }
 
 // find when and where was specified user last seen
-pub fn find_last_seen(
+pub async fn find_last_seen(
+	pool:        &SqlitePool,
 	cmd:         &CommandSource,
 	twitch_auth: &TwitchAuth,
 	config:      &Config
@@ -1312,30 +1309,37 @@ pub fn find_last_seen(
 			let user_id = api::id_from_nick(user_name, twitch_auth).await?;
 
 			match user_id {
-				Some(id) => (user_name, id)
-				None     => return Ok(Some(format!("❌ user \'{user_name}\' doesn't exist found")))
+				Some(id) => (user_name, id),
+				None     => return Ok(Some(format!("❌ user \'{user_name}\' doesn't exist found"))),
 			}
 		}
-	}
+	};
 
-	let mut latest_timestamp: Option<DateTime> = None;
+	let mut latest_timestamp: Option<DateTime<Utc>> = None;
 	let mut found_in_channel: Option<String>   = None;
-	for channel_name in config.channels {
-		let channel_id = api::id_from_nick(channel_name, twitch_auth).await?;
-		let latest = db::latest_message_date(channel_id, target_user_id).await?;
+	for channel_name in &config.channels {
+		let channel_id = api::id_from_nick(channel_name, twitch_auth).await?.unwrap();
+		let latest = db::latest_message_date(pool, channel_id, target_user_id).await?;
 
-		if Some(timestamp) = latest {
-			if timestamp > latest_timestamp {
-				latest_timestamp = Some(timestamp);
+		if let Some(ts) = latest {
+			if let Some(latest_ts) = latest_timestamp {
+				if ts > latest_ts {
+					latest_timestamp = Some(ts);
+					found_in_channel = Some(channel_name.clone());
+				}
+			} else {
+				latest_timestamp = Some(ts);
 				found_in_channel = Some(channel_name.clone());
 			}
+			
 		}
 	}
-	
-	let duration = fmt_duration(Utc::now() - latest_timestamp, false)
 
 	match latest_timestamp {
-		Some(tm) => Ok(Some(format!("⌛ {target_user_name} was last seen {duration} in {found_in_channel}"))),
+		Some(tm) => {
+			let duration = fmt_duration(Utc::now() - tm, false);
+			Ok(Some(format!("⌛ {target_user_name} was last seen {duration} in {}", found_in_channel.unwrap())))
+		},
 		None     => Ok(Some(format!("❌ {target_user_name} not found in records"))),
 	}
 }

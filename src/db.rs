@@ -1,10 +1,9 @@
 use crate::{MyError, EmoteCache, CommandSource};
 
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 use rand::{self, Rng};
-use chrono::{DateTime, Utc};
+use chrono::{offset::TimeZone, DateTime, Utc};
 use sqlx::sqlite::SqlitePool;
 use sqlx::Sqlite;
 use twitch_irc::message::PrivmsgMessage;
@@ -84,7 +83,8 @@ pub async fn log(
 		.bind(&privmsg.sender.id)
 		.bind(&privmsg.sender.name)
 		.bind(&privmsg.badges.iter().map(|badge| format!("{}_", badge.name)).collect::<String>())
-		.bind(&format!("{}", &privmsg.server_timestamp))
+		// here, the datetime was previously unformatted ... pain 
+		.bind(&format!("{}", &privmsg.server_timestamp.format("%Y-%m-%d %H:%M:%S").to_string()))
 		.bind(&privmsg.message_text)
 		.execute(&mut *conn)
 		.await?;
@@ -336,10 +336,10 @@ pub async fn insert_reminder(
 }
 
 pub async fn log_command(
-	pool: &SqlitePool,
-	cmd: &CommandSource,
-	execution_time: Duration,
-	output: &str,
+	pool:           &SqlitePool,
+	cmd:            &CommandSource,
+	execution_time: std::time::Duration,
+	output:         &str,
 ) -> anyhow::Result<()> {
 	let mut conn = pool.acquire().await?;
 
@@ -985,9 +985,10 @@ pub async fn get_channel_chat_stats(
 } 
 
 pub async fn latest_message_date(
+	pool:           &SqlitePool,
 	channel_id:     i32,
 	target_user_id: i32
-) -> anyhow::Result<Option<DateTime>> {
+) -> anyhow::Result<Option<DateTime<Utc>>> {
 	let mut conn = pool.acquire().await?;
 
 	let sql = r#"
@@ -1003,13 +1004,19 @@ pub async fn latest_message_date(
 			1;
 	"#.replace("{{ CHANNEL_ID }}", &channel_id.to_string());
 
-	let timestamps = sqlx::query_as::<Sqlite, DateTimeQR>(&sql)
+	let timestamps = sqlx::query_as::<Sqlite, StringQR>(&sql)
 		.bind(target_user_id)
 		.fetch_all(&mut *conn)
 		.await?;
 
 	match timestamps.get(0) {
-		0 => Ok(None),
-		_ => Ok(Some(timestamp))
+		None    => Ok(None),
+		Some(t) => {
+			let naive_t = chrono::NaiveDateTime::parse_from_str(&t.0[..19], "%Y-%m-%d %H:%M:%S").unwrap();
+			let parsed_t: DateTime<Utc> = Utc.from_local_datetime(&naive_t).unwrap();
+
+			Ok(Some(parsed_t))
+		}
 	}
 }
+
