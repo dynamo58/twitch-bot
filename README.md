@@ -19,6 +19,7 @@ Lovcen (/lôːʋtɕen/) is a sophisticated [Twitch.tv](https://www.twitch.tv) ch
 | accage         | [name: opt(str)]                                                           | get the account age of spec. user or one's self                    | None
 | bench          | Command                                                                    | measure how long a command takes to execute                        | None
 | bible          | None                                                                       | get a random verse from the bible                                  | None
+| cf             | None                                                                       | classic coinflip                                                   | None
 | clearreminders | None                                                                       | clears all reminders the user has set (that are still pending)     | None
 | commands       | None                                                                       | returns a link to the command list (according to config file)      | None
 | chatstats      | [period: str] [mode: str]                                                  | get the chat statistics of a channel                               | None
@@ -31,6 +32,7 @@ Lovcen (/lôːʋtɕen/) is a sophisticated [Twitch.tv](https://www.twitch.tv) ch
 | first          | [nick: opt(str)] [channel: opt(str)]                                       | get the first logged message of a user (in any channel)            | None
 | followage      | [user: opt(str)] [channel: opt(str)]                                       | get the amount of time a user has been following a channel         | None
 | giveup         | None                                                                       | give up the current trivia question                                | None
+| inspireme      | None                                                                       | get inspired                                                       | None
 | lastseen       | [user: str]                                                                | alias for the `ls` command                                         | None
 | ls             | [user: str]                                                                | find when and where was specified user last seen                   | None
 | lurk           | None                                                                       | go into lurk mode (gets removed upon next message)                 | None
@@ -87,6 +89,7 @@ This bot also uses various third-party APIs, those include (but may not be limit
 - [Wikipedia](https://en.wikipedia.org/wiki/Main_Page) to query gists of Wiki posts
 - [Dictionary API](https://dictionaryapi.dev/) to query english dictionary words
 - [WoframAlpha](https://products.wolframalpha.com/api/) to query questions (mainly as a platform for a solid `math` command)
+- [InspiroBot](https://inspirobot.me/api?generate=true) to get high quality inspirations
 
 # Examples
 

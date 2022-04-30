@@ -541,5 +541,3 @@ pub fn fmt_duration(dur: chrono::Duration, long_format: bool) -> String {
 	out.pop();
 	out
 }
-
-// test

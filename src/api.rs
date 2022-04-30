@@ -3,6 +3,7 @@
 use crate::{TwitchAuth, MyError};
 use crate::api_models as models;
 
+use std::borrow::BorrowMut;
 use std::fmt::Display;
 
 use chrono::{DateTime, Utc};
@@ -488,15 +489,14 @@ pub async fn get_reddit_posts(
 ) -> anyhow::Result<models::SubredditResponse> {
     let relevancy_str = relevancy.as_str();
 
-    let res = Client::new()
+    let res: models::SubredditResponse = Client::new()
         .get(&format!("https://www.reddit.com/r/{subreddit}/top.json?limit=30&t=${relevancy_str}"))
         .send()
         .await?
-        .text()
+        .json()
         .await?;
 
-    let parsed: models::SubredditResponse = serde_json::from_str(&res)?;
-    Ok(parsed)
+    Ok(res)
 }
 
 // get the time in a location
@@ -851,4 +851,16 @@ pub async fn get_github_repo_info(
         .await?
         .json::<models::GitHubRepoResponse>()
         .await?)
+}
+
+// get some words of wisdom from  inspirebot.me
+pub async fn get_inspire_image()
+-> anyhow::Result<String> {
+    Ok(Client::new()
+        .get("https://inspirobot.me/api?generate=true")
+        .send()
+        .await?
+        .text()
+        .await?
+    )
 }

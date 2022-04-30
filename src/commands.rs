@@ -46,17 +46,19 @@ pub async fn handle_command(
 
 	let cmd_out = match cmd.cmd.as_str() {
 		// standard commands
-		"echo"           => echo(&cmd).await,
+		"cf"             => coinflip(),
+		"echo"           => echo(&cmd),
+		"8ball"          => decide(&cmd),
+		"decide"         => decide(&cmd),
 		"query"          => query(&cmd).await,
 		"math"           => query(&cmd).await,
 		"ping"           => ping(config).await,
-		"decide"         => decide(&cmd).await,
-		"8ball"          => decide(&cmd).await,
 		"time"           => get_time(&cmd).await,
 		"pasta"          => get_rand_pasta().await,
 		"markov"         => markov(pool, &cmd).await,
 		"newcmd"         => new_cmd(pool, &cmd).await,
 		"suggest"        => suggest(pool, &cmd).await,
+		"inspireme"      => get_inspire_image().await,
 		"reddit"         => get_reddit_post(&cmd).await,
 		"wiki"           => query_wikipedia(&cmd).await,
 		"setalias"       => set_alias(pool, &cmd).await,
@@ -134,6 +136,13 @@ pub async fn handle_command(
 	None
 }
 
+fn coinflip() -> anyhow::Result<Option<String>>{
+	match rand::thread_rng().gen_range(0..2) {
+		0 => Ok(Some("Tails!".into())),
+		_ => Ok(Some("Heads!".into())),
+	}
+}
+
 async fn get_commands_reference_link(link: &str) -> anyhow::Result<Option<String>> {
 	Ok(Some(format!("🛠️ {link}")))
 }
@@ -166,7 +175,7 @@ async fn ping(
 }
 
 // say whatever caller said
-async fn echo(
+fn echo(
 	cmd: &CommandSource,
 ) -> anyhow::Result<Option<String>> {
 	if cmd.sender.is_mvb() {
@@ -792,7 +801,7 @@ pub async fn get_word_ratio(
 
 // parses the args into a list of (comma-separated) decisions,
 // choses one of them at random and returns it
-async fn decide(
+fn decide(
 	cmd: &CommandSource,
 ) -> anyhow::Result<Option<String>> {
 	match cmd.args.len() {
@@ -1310,7 +1319,7 @@ pub async fn find_last_seen(
 
 			match user_id {
 				Some(id) => (user_name, id),
-				None     => return Ok(Some(format!("❌ user \'{user_name}\' doesn't exist found"))),
+				None     => return Ok(Some(format!("❌ user \'{user_name}\' doesn't exist"))),
 			}
 		}
 	};
@@ -1342,4 +1351,9 @@ pub async fn find_last_seen(
 		},
 		None     => Ok(Some(format!("❌ {target_user_name} not found in records"))),
 	}
+}
+
+async fn get_inspire_image()
+-> anyhow::Result<Option<String>> {
+	Ok(Some(format!("FeelsStrongMan {}", api::get_inspire_image().await?)))
 }

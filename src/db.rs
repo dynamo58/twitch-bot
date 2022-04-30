@@ -84,7 +84,7 @@ pub async fn log(
 		.bind(&privmsg.sender.name)
 		.bind(&privmsg.badges.iter().map(|badge| format!("{}_", badge.name)).collect::<String>())
 		// here, the datetime was previously unformatted ... pain 
-		.bind(&format!("{}", &privmsg.server_timestamp.format("%Y-%m-%d %H:%M:%S").to_string()))
+		.bind(&privmsg.server_timestamp.format("%Y-%m-%d %H:%M:%S").to_string())
 		.bind(&privmsg.message_text)
 		.execute(&mut *conn)
 		.await?;
