@@ -24,8 +24,7 @@ use commands::handle_command;
 
 use std::sync::{Arc, Mutex};
 
-use actix_files::Files;
-use actix_web::{web, App, HttpServer, middleware, HttpResponse, Error, get};
+use actix_web::{App, HttpServer, middleware, HttpResponse, Error, get};
 use colored::*;
 use chrono::Local;
 use dotenv::dotenv;
@@ -273,14 +272,19 @@ async fn main() -> anyhow::Result<()> {
 		&t[..t.len()-17]
 	);
 
+	#[allow(non_snake_case)]
+	let WEB_PORT = match std::env::var("PORT") {
+		Ok(p)  => p,
+		Err(_) => "3000".to_owned(),
+	};
+
 	let server = HttpServer::new(move || {
         App::new()
             .wrap(middleware::Logger::default())
             .wrap(middleware::Compress::default())
 				.service(get_home)
-				.service(Files::new("/", "./static/"))
 	})
-		.bind("127.0.0.1:3000")?
+		.bind(&format!("127.0.0.1:{WEB_PORT}"))?
 		.run();
 
 	server.await.unwrap();
