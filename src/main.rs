@@ -24,6 +24,8 @@ use commands::handle_command;
 
 use std::sync::{Arc, Mutex};
 
+use actix_files::Files;
+use actix_web::{web, App, HttpServer, middleware, HttpResponse, Error, get};
 use colored::*;
 use chrono::Local;
 use dotenv::dotenv;
@@ -38,7 +40,6 @@ use twitch_irc::message::ServerMessage;
 // that might be subject to change
 // in the future, idk
 const DB_PATH: &str = "sqlite:db.db";
-
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -271,7 +272,31 @@ async fn main() -> anyhow::Result<()> {
 		"SUCCESS".green().bold(),
 		&t[..t.len()-17]
 	);
+
+	let server = HttpServer::new(move || {
+        App::new()
+            .wrap(middleware::Logger::default())
+            .wrap(middleware::Compress::default())
+				.service(get_home)
+				.service(Files::new("/", "./static/"))
+	})
+		.bind("127.0.0.1:3000")?
+		.run();
+
+	server.await.unwrap();
     message_listener_handle.await.unwrap();
 
     Ok(())
+}
+
+#[get("/")]
+pub async fn get_home() -> Result<HttpResponse, Error> {
+	let html = r#"
+		ahoj světe!
+	"#;
+
+
+    Ok(HttpResponse::Ok()
+        .content_type("text/html")
+        .body(html))
 }
