@@ -6,18 +6,21 @@ mod background;
 
 use twitch_bot::{
 	Config,
-	CommandSource,
 	Channel,
 	MyError,
+	EmoteCache,
 	TwitchAuth, 
 	TwitchBadge,
-	fmt_duration,
 	NameIdCache,
-	EmoteCache,
-	OngoingTriviaGames,
+	CommandSource,
+	TriviaGameInfo,
+	ChannelSpecifics,
+	ChannelSpecificsCache,
+	MessageHook,
+	HookMatchType,
+	fmt_duration,
 	convert_from_html_entities,
 	convert_to_html_encoding,
-	TriviaGameInfo,
 };
 use background as bg;
 use commands::handle_command;
@@ -67,9 +70,9 @@ async fn main() -> anyhow::Result<()> {
 		}
 	}));
 
-	// encompasses all of the trivia games that are going on
-	let ongoing_trivia_games = Arc::new(Mutex::new(OngoingTriviaGames::new()));
-	
+	// holds channel-specific information crucial for runtime
+	let channel_specifics_arc = Arc::new(Mutex::new(ChannelSpecificsCache::new()));
+
 
 	
 	// instantiate database connection pool
@@ -87,6 +90,7 @@ async fn main() -> anyhow::Result<()> {
 
 	// create database tables for channels in config
 	// (if they do not already exist)
+	let mut ids: Vec<i32> =  vec![];
 	for channel in &config.channels {
 		let channel_id = api::id_from_nick(channel, &auth)
 			.await?
@@ -106,9 +110,30 @@ async fn main() -> anyhow::Result<()> {
                     channel.bold(),
 				)
 			);
+		
+		ids.push(channel_id);
 	}
 	println!("{}   Created tables in db", "INFO   ".blue().bold());
 
+
+	if let Ok(mut cache) = channel_specifics_arc.lock() {
+		for id in ids {
+			let hooks = match db::get_channel_hooks(&pool, id).await? {
+				Some(hs) => hs,
+				None     => vec![],
+			};
+
+			cache.insert(id.to_string(), ChannelSpecifics {
+				hooks,
+				ongoing_trivia_game: None,
+			});
+		}
+	} else {
+		panic!(
+			"{}   Could not initialize game specifics, aborting",
+            "ERROR  ".red().bold()
+		)
+	}
 
 	// instantiate Twitch client
 	let client_config: ClientConfig<StaticLoginCredentials> = ClientConfig::new_simple(
@@ -169,7 +194,7 @@ async fn main() -> anyhow::Result<()> {
 		let auth = auth.clone();
 		let nameid_cache_arc = name_id_cache.clone();
 		let emote_cache_arc = emote_cache.clone();
-		let ongoing_trivia_games_arc = ongoing_trivia_games.clone();
+		let channel_specifics_arc = channel_specifics_arc.clone();
 
 		tokio::spawn(async move {
 			while let Some(message) = incoming_messages.recv().await {
@@ -229,8 +254,16 @@ async fn main() -> anyhow::Result<()> {
 
 					// if message is a command, handle it
 					if privmsg.message_text.chars().next().unwrap() == config.prefix {
-						let cmd_src = CommandSource::from_privmsg(privmsg);
-						handle_command(&pool, client.clone(), &config, &auth, nameid_cache_arc.clone(), cmd_src, false, ongoing_trivia_games_arc.clone()).await;
+						let cmd_src = CommandSource::from_privmsg(privmsg.clone());
+						handle_command(
+							&pool,
+							client.clone(),
+							&config,
+							&auth,
+							nameid_cache_arc.clone(),
+							cmd_src,
+							channel_specifics_arc.clone()
+						).await;
 					} else {
 						// index for markov if enabled by config
 						if config.index_markov {
@@ -240,11 +273,22 @@ async fn main() -> anyhow::Result<()> {
 						let channel_id = &privmsg.source.tags.0.get("room-id");
 						if let Some(Some(room_id)) = channel_id {
 							let mut correct = false;
-							if let Ok(mut cache) = ongoing_trivia_games_arc.lock() {
-								if let Some(trivia_info) = (*cache).get(room_id) {
-									if trivia_info.correct_answer.to_lowercase() == privmsg.message_text.to_lowercase() {
-										(*cache).remove(room_id);
-										correct = true;
+							if let Ok(mut cache) = channel_specifics_arc.lock() {
+								if
+									(*cache).get(room_id).is_some() &&
+									(*cache).get(room_id).unwrap().ongoing_trivia_game.is_some()
+								{
+									let trivia_info = &(*cache)
+										.get(room_id)
+										.unwrap()
+										.ongoing_trivia_game
+										.clone();
+
+									if let Some(ti) = trivia_info {
+										if ti.correct_answer.to_lowercase() == privmsg.message_text.to_lowercase() {
+											(*cache).remove(room_id);
+											correct = true;
+										}
 									}
 								}
 							}
@@ -256,6 +300,39 @@ async fn main() -> anyhow::Result<()> {
 								).await.unwrap();
 							}
 						}
+					}
+
+					// check if message doesn't match any of the channel hooks
+					let mut matches                      = false;
+					let mut match_phrase: Option<String> = None;
+					if let Ok(cache) = channel_specifics_arc.lock() {
+						if (*cache).get(&privmsg.channel_id).is_some() {
+							let hooks = (*cache).get(&privmsg.channel_id).unwrap().hooks.clone();
+							
+							for hook in &hooks {
+								match hook.h_type {
+									crate::HookMatchType::Substring => {
+										if privmsg.message_text.contains(&hook.capture_string.to_lowercase()) {
+											matches = true;
+											match_phrase = Some(hook.content.clone());
+										}
+									},
+									crate::HookMatchType::Exact     => {
+										if privmsg.message_text == hook.capture_string {
+											matches = true;
+											match_phrase = Some(hook.content.clone());
+										}
+									},
+								}
+							}
+						}
+					}
+
+					if matches {
+						client.say(
+							privmsg.source.params[0][1..].to_owned(),
+							match_phrase.unwrap(),
+						).await.unwrap();
 					}
 				}
 			}

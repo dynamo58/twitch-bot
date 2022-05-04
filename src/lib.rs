@@ -124,11 +124,12 @@ pub struct Channel {
 // which the bot works with
 #[derive(Clone)]
 pub struct CommandSource {
-	pub cmd: String,
-	pub args: Vec<String>,
-	pub sender: Sender,
-	pub channel: Channel,
+	pub cmd:       String,
+	pub args:      Vec<String>,
+	pub sender:    Sender,
+	pub channel:   Channel,
 	pub timestamp: DateTime<Utc>,
+	pub is_pipe:   bool,
 }
 
 impl CommandSource {
@@ -185,6 +186,7 @@ impl CommandSource {
 				id: privmsg.channel_id.parse::<i32>().unwrap(),
 			},
 			timestamp: privmsg.server_timestamp,
+			is_pipe: false,
 		}
 	}
 
@@ -403,6 +405,49 @@ impl EmoteCache {
 // store the users' Twitch ID
 pub type NameIdCache = HashMap<String, i32>;
 
+#[derive(Clone, Debug)]
+pub enum HookMatchType {
+	Exact,
+	Substring,
+}
+
+impl std::str::FromStr for HookMatchType {
+	type Err = MyError;
+	
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		match s.to_lowercase().as_str() {
+			"exact"  => Ok(Self::Exact),
+			"substr" => Ok(Self::Substring),
+			_        => Err(MyError::NotFound),
+		}
+	}
+}
+
+impl std::string::ToString for HookMatchType {
+	fn to_string(&self) -> String {
+		match self {
+			Self::Exact     => "exact".to_owned(),
+			Self::Substring => "substr".to_owned(),
+		}
+	}
+}
+
+
+
+#[derive(Clone, Debug)]
+pub struct MessageHook {
+	pub capture_string: String, 
+	pub content:        String,
+	pub h_type:         HookMatchType,
+}
+
+#[derive(Debug)]
+pub struct ChannelSpecifics {
+	pub hooks:               Vec<MessageHook>,
+	pub ongoing_trivia_game: Option<TriviaGameInfo>, 
+}
+
+pub type ChannelSpecificsCache = HashMap<String, ChannelSpecifics>;
 
 // converts html entities to actual chars (only some selected ones, not all!!) 
 pub fn convert_from_html_entities(s: String) -> String {
@@ -459,7 +504,7 @@ pub fn convert_to_html_encoding(s: String) -> String {
 		.replace('”',  "%E2%80%9D")
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TriviaGameInfo {
 	pub question: String,
 	pub correct_answer: String,
@@ -487,8 +532,6 @@ impl TriviaGameInfo {
 		answers
 	}
 }
-
-pub type OngoingTriviaGames = HashMap<String, TriviaGameInfo>; 
 
 // format a duration into a string
 #[allow(non_snake_case)]

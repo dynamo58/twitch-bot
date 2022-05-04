@@ -21,8 +21,16 @@ CREATE TABLE IF NOT EXISTS CHANNEL_{{ CHANNEL_ID }}_OFFLINERS (
 
 CREATE TABLE IF NOT EXISTS CHANNEL_{{ CHANNEL_ID }}_COMMANDS (
 	id          INTEGER PRIMARY KEY,
-	name        TEXT NOT NULL UNIQUE,
-	type        TEXT NOT NULL UNIQUE,
+	name        TEXT UNIQUE,
+	type        TEXT NOT NULL,
 	expression  TEXT NOT NULL,
 	metadata    INTEGER DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS CHANNEL_{{ CHANNEL_ID }}_HOOKS (
+	id             INTEGER PRIMARY KEY,
+	name           TEXT UNIQUE,
+	type           TEXT NOT NULL,
+	capture_string TEXT NOT NULL,
+	content        TEXT NOT NULL
 );

@@ -1,11 +1,12 @@
 use crate::{MyError, EmoteCache, CommandSource};
 
+use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
 use rand::{self, Rng};
 use chrono::{offset::TimeZone, DateTime, Utc};
 use sqlx::sqlite::SqlitePool;
-use sqlx::Sqlite;
+use sqlx::{Sqlite};
 use twitch_irc::message::PrivmsgMessage;
 
 
@@ -24,6 +25,9 @@ struct DateTimeQR(DateTime<Utc>);
 
 #[derive(sqlx::FromRow)]
 struct ChannelCommandQR(String, String, i32);
+
+#[derive(sqlx::FromRow, Debug)]
+pub struct StringStringStringQR(String, String, String);
 
 #[derive(sqlx::FromRow, Debug)]
 pub struct Reminder {
@@ -672,7 +676,7 @@ pub async fn get_offline_time(
 	}
 }
 
-pub async fn new_cmd(
+pub async fn set_cmd(
 	pool: &SqlitePool,
 	channel_id: i32,
 	cmd_name:   &str,
@@ -693,6 +697,35 @@ pub async fn new_cmd(
 		.bind(cmd_name)
 		.bind(cmd_type)
 		.bind(cmd_expr)
+		.execute(&mut *conn)
+		.await?;
+	
+	Ok(())
+}
+
+pub async fn set_hook(
+	pool:           &SqlitePool,
+	channel_id:     i32,
+	name:           &str,
+	h_type:         &str,
+	capture_string: &str,
+	content:        &str,
+) -> anyhow::Result<()> {
+	let mut conn = pool.acquire().await?;
+
+    let sql = r#"
+    INSERT OR REPLACE
+        INTO CHANNEL_{{ CHANNEL_ID }}_HOOKS
+	        (name, type, capture_string, content)
+        VALUES
+	        (?1, ?2, ?3, ?4)
+    "#.replace("{{ CHANNEL_ID }}", &channel_id.to_string());
+
+	sqlx::query::<Sqlite>(&sql)
+		.bind(name)
+		.bind(h_type)
+		.bind(capture_string)
+		.bind(content)
 		.execute(&mut *conn)
 		.await?;
 	
@@ -1020,3 +1053,37 @@ pub async fn latest_message_date(
 	}
 }
 
+pub async fn get_channel_hooks(
+	pool:           &SqlitePool,
+	channel_id:     i32,
+) -> anyhow::Result<Option<Vec<crate::MessageHook>>> {
+	let mut conn = pool.acquire().await?;
+
+	let sql = r#"
+		SELECT
+			type, capture_string, content
+		FROM
+			CHANNEL_{{ CHANNEL_ID }}_HOOKS
+		WHERE
+			type="hook";
+	"#.replace("{{ CHANNEL_ID }}", &channel_id.to_string());
+
+	let hooks = sqlx::query_as::<Sqlite, StringStringStringQR>(&sql)
+		.fetch_all(&mut *conn)
+		.await?;
+		
+	if hooks.is_empty() {
+		return Ok(None);
+	}
+
+	let mut out = vec![];
+	for hook in hooks {
+		out.push(crate::MessageHook {
+			h_type:         crate::HookMatchType::from_str(&hook.0)?,
+			capture_string: hook.1,
+			content:        hook.2,
+		});
+	}
+
+	Ok(Some(out))
+}

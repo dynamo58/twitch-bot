@@ -3,12 +3,13 @@
 use crate::db;
 use crate::api;
 use crate::{
-	CommandSource,
+	Config,
 	MyError,
 	TwitchAuth,
 	TwitchBadge,
 	NameIdCache,
-	Config,
+	CommandSource,
+	ChannelSpecificsCache,
 	fmt_duration,
 	convert_from_html_entities,
 };
@@ -29,14 +30,13 @@ type TwitchClient = twitch_irc::TwitchIRCClient<twitch_irc::transport::tcp::TCPT
 pub async fn handle_command(
 	// this looks like an abomination
 	// but it is what it is
-	pool:       &SqlitePool,
-	client:     TwitchClient,
-	config:     &Config,
-	auth:       &TwitchAuth,
-	cache_arc: Arc<Mutex<NameIdCache>>,
-	cmd:        CommandSource,
-	is_pipe:    bool,
-	ongoing_trivia_games_arc: Arc<Mutex<crate::OngoingTriviaGames>>,
+	pool:                  &SqlitePool,
+	client:                TwitchClient,
+	config:                &Config,
+	auth:                  &TwitchAuth,
+	cache_arc:             Arc<Mutex<NameIdCache>>,
+	cmd:                   CommandSource,
+	channel_specifics_arc: Arc<Mutex<crate::ChannelSpecificsCache>>,
 ) -> Option<String> {
 	if let Ok(mut cache) = cache_arc.clone().lock() {
 		cache.insert(cmd.sender.name.clone(), cmd.sender.id);
@@ -56,9 +56,10 @@ pub async fn handle_command(
 		"time"           => get_time(&cmd).await,
 		"pasta"          => get_rand_pasta().await,
 		"markov"         => markov(pool, &cmd).await,
-		"newcmd"         => new_cmd(pool, &cmd).await,
+		"setcmd"         => set_cmd(pool, &cmd).await,
 		"suggest"        => suggest(pool, &cmd).await,
 		"inspireme"      => get_inspire_image().await,
+		"sethook"        => set_hook(pool, &cmd, channel_specifics_arc).await,
 		"reddit"         => get_reddit_post(&cmd).await,
 		"wiki"           => query_wikipedia(&cmd).await,
 		"setalias"       => set_alias(pool, &cmd).await,
@@ -84,17 +85,17 @@ pub async fn handle_command(
 		"tanakh"         => get_rand_holy_book_verse(api::HolyBook::Tanakh).await,
 		"remindme"       => add_reminder(pool, auth, cache_arc, &cmd, true).await,
 		"remind"         => add_reminder(pool, auth, cache_arc, &cmd, false).await,
-		"giveup"         => give_up_trivia(&cmd, auth,ongoing_trivia_games_arc).await,
-		"hint"           => give_trivia_hint(&cmd, auth, ongoing_trivia_games_arc).await,
+		"giveup"         => give_up_trivia(&cmd, auth, channel_specifics_arc).await,
+		"hint"           => give_trivia_hint(&cmd, auth, channel_specifics_arc).await,
 		"wordratio"      => get_word_ratio(pool, auth, &cmd, config.prefix, cache_arc).await,
 		"commands"       => get_commands_reference_link(&config.commands_reference_path).await,
-		"trivia"         => attempt_start_trivia_game(&cmd, auth, ongoing_trivia_games_arc).await,
+		"trivia"         => attempt_start_trivia_game(&cmd, auth, channel_specifics_arc).await,
 		"rose"           => tag_rand_chatter_with_rose(&cmd.channel.name, &config.disregarded_users).await,
-		"demultiplex"    => demultiplex(pool, client.clone(), config, auth, cache_arc, &cmd, ongoing_trivia_games_arc).await,
-		"bench"          => bench_command(pool, client.clone(), config, auth, cache_arc, &cmd, ongoing_trivia_games_arc).await,
+		"demultiplex"    => demultiplex(pool, client.clone(), config, auth, cache_arc, &cmd, channel_specifics_arc).await,
+		"bench"          => bench_command(pool, client.clone(), config, auth, cache_arc, &cmd, channel_specifics_arc).await,
 		// special commands
-		"pipe"           => pipe(pool, client.clone(), config, auth, cache_arc, &cmd, ongoing_trivia_games_arc).await,
-		""               => execute_alias(pool, client.clone(), config, auth, cache_arc, &cmd, ongoing_trivia_games_arc).await,
+		"pipe"           => pipe(pool, client.clone(), config, auth, cache_arc, &cmd, channel_specifics_arc).await,
+		""               => execute_alias(pool, client.clone(), config, auth, cache_arc, &cmd, channel_specifics_arc).await,
 		_                => try_execute_channel_command(pool, &cmd).await,
 	};
 
@@ -106,7 +107,7 @@ pub async fn handle_command(
 		},
 	};
 
-	if is_pipe {
+	if cmd.is_pipe {
 		return cmd_out;
 	}
 
@@ -147,12 +148,10 @@ async fn get_commands_reference_link(link: &str) -> anyhow::Result<Option<String
 	Ok(Some(format!("🛠️ {link}")))
 }
 
-
 // ping -> pong
 async fn ping(
 	config: &Config,
-)
--> anyhow::Result<Option<String>> {
+) -> anyhow::Result<Option<String>> {
 	let mut out = String::from("Pong!");
 
 	if let Ok(startup_time) = std::env::var("STARTUP_TIME") {
@@ -239,7 +238,7 @@ async fn execute_alias(
 	auth: &TwitchAuth,
 	cache_arc: Arc<Mutex<NameIdCache>>,
 	cmd: &CommandSource,
-	ongoing_trivia_games_arc: Arc<Mutex<crate::OngoingTriviaGames>>,
+	channel_specifics_arc: Arc<Mutex<ChannelSpecificsCache>>,
 ) -> anyhow::Result<Option<String>> {
 	let alias = match cmd.args.get(0) {
 		Some(a) => a.clone(),
@@ -255,6 +254,7 @@ async fn execute_alias(
 	};
 
 	let new_cmd = CommandSource {
+		is_pipe: cmd.is_pipe,
 		cmd: match alias_cmd.get(0) {
 			Some(a) => a[1..].to_owned(),
 			None => return Ok(Some("❌ alias faulty".into())),
@@ -268,7 +268,7 @@ async fn execute_alias(
 		timestamp: cmd.timestamp,
 	};
 
-	handle_command(pool, client, config, auth, cache_arc, new_cmd, false, ongoing_trivia_games_arc.clone()).await;
+	handle_command(pool, client, config, auth, cache_arc, new_cmd, channel_specifics_arc.clone()).await;
 
 	Ok(None)
 }
@@ -571,9 +571,10 @@ async fn bench_command(
 	auth:       &TwitchAuth,
 	cache_arc:  Arc<Mutex<NameIdCache>>,
 	cmd:        &CommandSource,
-	ongoing_trivia_games_arc: Arc<Mutex<crate::OngoingTriviaGames>>,
+	channel_specifics_arc: Arc<Mutex<ChannelSpecificsCache>>,
 ) -> anyhow::Result<Option<String>> {
 	let new_cmd = CommandSource {
+		is_pipe: true,
 		cmd: match cmd.args.get(0) {
 			Some(a) => a[1..].to_owned(),
 			None => return Ok(Some("❌ no command provided".into())),
@@ -588,7 +589,7 @@ async fn bench_command(
 	};
 
 	let now = Instant::now();
-	handle_command(pool, client, config, auth, cache_arc, new_cmd, true, ongoing_trivia_games_arc.clone()).await;
+	handle_command(pool, client, config, auth, cache_arc, new_cmd, channel_specifics_arc.clone()).await;
 	Ok(Some(format!("📡 {} ms", now.elapsed().as_millis())))
 }
 
@@ -621,12 +622,13 @@ async fn query_wikipedia(
 					.extract
 					.split('.').collect::<Vec<&str>>()[0];
 
-				return Ok(Some(abs.to_owned()));
+				Ok(Some(abs.to_owned()))
+			} else {
+				Ok(Some("❌ couldn't get gist of article".into()))
 			}
 		},
-		None => return Ok(Some("❌ Article not found.".into())),
-	};
-	todo!()
+		None => Ok(Some("❌ article not found.".into())),
+	}
 }
 
 // get a (english only) word definition
@@ -635,7 +637,7 @@ async fn query_dictionary(
 ) -> anyhow::Result<Option<String>> {
 	let word = match cmd.args.get(0) {
 		Some(w) => w,
-		None    => return Ok(Some("❌ No word provided".into())),
+		None    => return Ok(Some("❌ no word provided".into())),
 	};
 	
 	match api::query_dictionary(word).await? {
@@ -684,7 +686,7 @@ async fn get_followage(
 	}
 }
 
-async fn new_cmd(
+async fn set_cmd(
 	pool: &SqlitePool,
 	cmd:  &CommandSource,
 ) -> anyhow::Result<Option<String>> {
@@ -715,9 +717,96 @@ async fn new_cmd(
 		None       => return Ok(Some("❌ no expression provided".into())),
 	};
 
-	db::new_cmd(pool, cmd.channel.id, cmd_name, cmd_type, &cmd_expr).await?;
+	db::set_cmd(pool, cmd.channel.id, cmd_name, cmd_type, &cmd_expr).await?;
 
 	Ok(Some("🔧 command created successfully".into()))
+}
+
+fn parse_by_ident(vs: &[String], ident: &str) -> Option<String> {
+	let s = vs.join(" ");
+	
+	let start_idx = s.find(&format!("{ident}=\""));
+	let mut end_idx: Option<usize> = None;
+	if let Some(idx) = start_idx {
+		end_idx = (s[idx+ident.len()+3..]).find('\"');
+	}
+
+	if let (Some(start), Some(end)) = (start_idx, end_idx) {
+		Some(s[start+ident.len()+2..start+ident.len()+3+end].to_owned())
+	} else {
+		None
+	}
+}
+
+pub async fn set_hook(
+	pool: &SqlitePool,
+	cmd:  &CommandSource,
+	channel_specifics_arc: Arc<Mutex<crate::ChannelSpecificsCache>>,
+) -> anyhow::Result<Option<String>> {
+	if !cmd.sender.is_mvb() {
+		return Ok(Some("❌ requires MVB privileges | E4".into()));
+	}
+
+	let hook_name = match cmd.args.get(0) {
+		Some(h) => h,
+		None    => return Ok(Some("❌ no hook name provided".into()))
+	};
+
+	let hook_type = match cmd.args.get(1) {
+		Some(s) => {
+			match crate::HookMatchType::from_str(s) {
+				Ok(h) => h,
+				Err(_) => return Ok(Some("❌ hook type not valid".into()))
+			}
+		},
+		None => return Ok(Some("❌ no hook type provided".into())),
+	};
+
+	let hook_catchphrase = match parse_by_ident(&cmd.args, "catch") {
+		Some(h) => h,
+		None => return Ok(Some("❌ no hook catchphrase provided".into())),
+	};
+
+	let hook_content = match parse_by_ident(&cmd.args, "content") {
+		Some(h) => h,
+		None => return Ok(Some("❌ no hook content provided".into())),
+	};
+
+	db::set_hook(pool, cmd.channel.id, hook_name, &hook_type.to_string(), &hook_catchphrase, &hook_content).await?;
+
+	let hook = crate::MessageHook {
+		capture_string: hook_catchphrase.to_owned(),
+		h_type:         hook_type,
+		content:        hook_content.to_owned(),
+	};
+
+
+	if let Ok(mut cache) = channel_specifics_arc.lock() {
+		let curr_hooks = (*cache)
+			.get(&cmd.channel.id.to_string())
+			.unwrap()
+			.hooks
+			.clone();
+		
+		let curr_ong = (*cache)
+			.get(&cmd.channel.id.to_string())
+			.unwrap()
+			.ongoing_trivia_game
+			.clone();
+
+		let mut hooks = curr_hooks;
+		hooks.push(hook);
+
+		(*cache).insert(
+			cmd.channel.id.to_string(),
+			crate::ChannelSpecifics {
+				hooks,
+				ongoing_trivia_game: curr_ong,
+			}
+		);
+	}
+
+	Ok(Some("🔧 hook created successfully".into()))
 }
 
 pub async fn try_execute_channel_command(
@@ -749,8 +838,8 @@ pub async fn try_execute_channel_command(
 		return Ok(Some(out.replace(&"{}", &format!("{cmd_meta}"))));
 	}
 
-	// unreachable unless some obscure error occures
-	Ok(None)
+	// unreachable unless some obscure internal error occures
+	Ok(Some("❌ internal error occured".into()))
 }
 
 pub async fn remove_channel_command(
@@ -857,7 +946,7 @@ async fn pipe(
 	auth:      &TwitchAuth,
 	cache_arc: Arc<Mutex<NameIdCache>>,
 	cmd:       &CommandSource,
-	ongoing_trivia_games_arc: Arc<Mutex<crate::OngoingTriviaGames>>,
+	channel_specifics_arc: Arc<Mutex<ChannelSpecificsCache>>,
 ) -> anyhow::Result<Option<String>> {
 	// the command is supposed to be of the form
 	// $pipe <command1 + command1 args> | <command2 + command3 args> | ...
@@ -883,6 +972,7 @@ async fn pipe(
 			.collect();
 
 		let new_cmd = CommandSource {
+			is_pipe: true,
 			cmd: match trimmed_cmd.get(0) {
 				Some(a) => a[1..].to_owned(),
 				None    => return Ok(Some(format!("❌ {}th pipe faulty", i+1))),
@@ -909,7 +999,7 @@ async fn pipe(
 			_           => (),
 		}
 
-		if let Some(output) = handle_command(pool, client.clone(), config, auth, cache_arc.clone(), new_cmd, true, ongoing_trivia_games_arc.clone()).await {
+		if let Some(output) = handle_command(pool, client.clone(), config, auth, cache_arc.clone(), new_cmd, channel_specifics_arc.clone()).await {
 			temp_output = output;
 		} else {
 			temp_output = "".to_owned();
@@ -1031,16 +1121,30 @@ pub async fn get_rand_holy_book_verse(
 pub async fn attempt_start_trivia_game(
 	cmd:                      &CommandSource,
 	twitch_auth:              &TwitchAuth,
-	ongoing_trivia_games_arc: Arc<Mutex<crate::OngoingTriviaGames>>,
+	channel_specifics_arc:    Arc<Mutex<ChannelSpecificsCache>>,
 ) -> anyhow::Result<Option<String>, anyhow::Error> {
-	let channel_id = cmd.channel.id;
-	
+	if let Ok(mut cache) = channel_specifics_arc.lock() {
+		// check if there isn't a game going on
+		if (
+			(*cache).get(&cmd.channel.id.to_string()).is_some() &&
+			(*cache).get(&cmd.channel.id.to_string()).unwrap().ongoing_trivia_game.is_some()
+		) {
+			return Ok(Some("❌ there is currently a game going on!".into()));
+		}
+	} // the access here has to be closed in order to execute async stuff
+	  // (there might be a better way to do this but i am oblivious)
+	else {
+		return Ok(Some("❌ internal server error has occurred, sorry PoroSad".into()))
+	}
+
+	// since there is no game in the channel, start one
+
 	let cat = api::TriviaCategory::from_vec(&cmd.args);
 	let dif = api::TriviaDifficulty::from_vec(&cmd.args);
 	let typ = api::TriviaType::from_vec(&cmd.args);
 	
 	let question = api::fetch_trivia_question(cat, dif, typ).await?;
-	let fmt_answer = {
+	let fmted_info = {
 		let q = convert_from_html_entities(question.question);
 		let c = convert_from_html_entities(question.correct_answer);
 		let w = question
@@ -1056,15 +1160,24 @@ pub async fn attempt_start_trivia_game(
 		}
 	};
 
+	if let Ok(mut cache) = channel_specifics_arc.lock() {
+		let curr_hooks = (*cache)
+			.get(&cmd.channel.id.to_string())
+			.unwrap()
+			.hooks
+			.clone();
 
-	if let Ok(mut cache) = ongoing_trivia_games_arc.lock() {
-		if (*cache).get(&channel_id.to_string()).is_some() {
-			return Ok(Some("❌ there is currently a game going on!".into()));
-		}
+		(*cache).insert(
+			cmd.channel.id.to_string(),
+			crate::ChannelSpecifics {
+				hooks:               curr_hooks,
+				ongoing_trivia_game: Some(fmted_info.clone())
+			}
+		);
 
-		(*cache).insert(channel_id.to_string(), fmt_answer.clone());
 
-		Ok(Some(convert_from_html_entities(fmt_answer.question)))
+		Ok(Some(fmted_info.question))
+
 	} else {
 		Ok(Some("An internal error has occured".into()))
 	}
@@ -1074,18 +1187,41 @@ pub async fn attempt_start_trivia_game(
 pub async fn give_up_trivia(
 	cmd:                      &CommandSource,
 	twitch_auth:              &TwitchAuth,
-	ongoing_trivia_games_arc: Arc<Mutex<crate::OngoingTriviaGames>>,
+	channel_specifics_arc: Arc<Mutex<ChannelSpecificsCache>>,
 ) -> anyhow::Result<Option<String>> {
 	let channel_id = cmd.channel.id;
 
-	if let Ok(mut cache) = ongoing_trivia_games_arc.lock() {
-		if let Some(trivia_info) = (*cache).get(&channel_id.to_string()) {
-			let c = trivia_info.clone();
-			(*cache).remove(&channel_id.to_string());
-			return Ok(Some(format!("So bad LUL | The answer was \'{}\'", c.correct_answer)));
+	if let Ok(mut cache) = channel_specifics_arc.lock() {
+		if (*cache).get(&channel_id.to_string()).is_some() {
+			if (*cache).get(&channel_id.to_string()).unwrap().ongoing_trivia_game.is_some() {
+				let curr_hooks = (*cache)
+					.get(&channel_id.to_string())
+					.unwrap()
+					.hooks
+					.clone();
+				
+				let q = &(*cache)
+					.get(&channel_id.to_string())
+					.unwrap()
+					.ongoing_trivia_game
+					.clone();
+				
+				(*cache).insert(
+					channel_id.to_string(),
+					crate::ChannelSpecifics {
+						hooks:               curr_hooks,
+						ongoing_trivia_game: None,
+					}
+				);
+				
+				if let Some(qa) = q {
+					let corr_answer = &qa.correct_answer;
+					return Ok(Some(format!("So bad LUL | The answer was \'{corr_answer}\'")));
+				}
+			}
+			
+			return Ok(Some("❌ there was no game going on LUL".into()));
 		}
-		
-		return Ok(Some("❌ there was no game going on LUL".into()));
 	}
 	
 	Ok(Some("An internal error has occured".into()))
@@ -1116,7 +1252,7 @@ pub async fn demultiplex(
 	auth:      &TwitchAuth,
 	cache_arc: Arc<Mutex<NameIdCache>>,
 	cmd:       &CommandSource,
-	ongoing_trivia_games_arc: Arc<Mutex<crate::OngoingTriviaGames>>,
+	channel_specifics_arc: Arc<Mutex<ChannelSpecificsCache>>,
 ) -> anyhow::Result<Option<String>> {
 	if !cmd.sender.is_mvb() {
 		return Ok(Some("❌ requires MVB privileges | E4".into()))
@@ -1145,6 +1281,7 @@ pub async fn demultiplex(
 	};
 
 	let new_cmd = CommandSource {
+		is_pipe: true,
 		cmd: match new_args.get(0) {
 			Some(a) => new_args[0][1..].to_owned(),
 			None => return Ok(Some("❌ alias faulty".into())),
@@ -1166,8 +1303,7 @@ pub async fn demultiplex(
 			config,
 			auth, cache_arc.clone(),
 			new_cmd.clone(),
-			true,
-			ongoing_trivia_games_arc.clone()
+			channel_specifics_arc.clone()
 		).await;
 
 		if let Some(o) = temp_out {
@@ -1283,22 +1419,34 @@ pub async fn get_chatstats(
 async fn give_trivia_hint(
 	cmd:                      &CommandSource,
 	twitch_auth:              &TwitchAuth,
-	ongoing_trivia_games_arc: Arc<Mutex<crate::OngoingTriviaGames>>,
+	channel_specifics_arc: Arc<Mutex<ChannelSpecificsCache>>,
 ) -> anyhow::Result<Option<String>> {
 	let channel_id = cmd.channel.id;
 
-	if let Ok(mut cache) = ongoing_trivia_games_arc.lock() {
-		if let Some(trivia_info) = (*cache).get(&channel_id.to_string()) {
-			let c = trivia_info
-				.shuffled_answers()
-				.iter()
-				.map(|a| a.to_string())
-				.collect::<Vec<String>>()
-				.join("\", \"");
-			return Ok(Some(format!("The options are: \"{}\"", c)));
-		}
+	if let Ok(mut cache) = channel_specifics_arc.lock() {
+		if (*cache).get(&channel_id.to_string()).is_some() {
+			if (*cache).get(&channel_id.to_string()).unwrap().ongoing_trivia_game.is_some() {
+				
+				let trivia_info = (*cache)
+					.get(&channel_id.to_string())
+					.unwrap()
+					.ongoing_trivia_game
+					.clone();
 
-		return Ok(Some("❌ there is no game going on FeelsDankMan".into()));
+				if let Some(ti) = trivia_info {
+					let c = ti
+						.shuffled_answers()
+						.iter()
+						.map(|a| a.to_string())
+						.collect::<Vec<String>>()
+						.join("\", \"");
+
+					return Ok(Some(format!("The options are: \"{}\"", c)));
+				}
+			}
+
+			return Ok(Some("❌ there is no game going on FeelsDankMan".into()));
+		}
 	}
 	
 	Ok(Some("❌ an internal error has occured".into()))

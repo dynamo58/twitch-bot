@@ -38,7 +38,7 @@ Lovcen (/lôːʋtɕen/) is a sophisticated [Twitch.tv](https://www.twitch.tv) ch
 | lurk           | None                                                                       | go into lurk mode (gets removed upon next message)                 | None
 | markov         | [start: str] [count: int]                                                  | responds with a markov chain generated from saved chat messages    | None
 | math           | [expression: text]                                                         | alias for the `query` command                                      | None
-| newcmd         | [type: templ\|paste\|incr] [expression: str]                               | create a new channel command                                       | Broadcaster/Moderator/VIP
+| setcmd         | [type: templ\|paste\|incr] [expression: str]                               | create a new channel command                                       | Broadcaster/Moderator/VIP
 | offlinetime    | [name: opt(str)]                                                           | returns the time a user has thus far spent in offline chat         | None
 | pasta          | None                                                                       | random copypasta from `assets/copypastas.json` (no ascii art)      | None
 | ping           | None                                                                       | responds with "pong"                                               | None
@@ -61,6 +61,7 @@ Lovcen (/lôːʋtɕen/) is a sophisticated [Twitch.tv](https://www.twitch.tv) ch
 | weather        | [location: text]                                                           | get weather report from specified location                         | None
 | wiki           | [phrase: text]                                                             | tries to query Wikipedia for searched topic/title                  | None
 | wordratio      | [user: opt(str)] [word: str]                                               | get the ratio of messages of a user that contain certain word      | None
+| sethook        | [exact/substr] catch="<catchphrase>" content="<content>"                   | set a hook for incoming messages in the channel                    | Broadcaster/Moderator/VIP
 
 # Run yourself
 
