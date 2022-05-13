@@ -312,7 +312,7 @@ async fn main() -> anyhow::Result<()> {
 							for hook in &hooks {
 								match hook.h_type {
 									crate::HookMatchType::Substring => {
-										if privmsg.message_text.contains(&hook.capture_string.to_lowercase()) {
+										if privmsg.message_text.to_lowercase().contains(&hook.capture_string.to_lowercase()) {
 											matches = true;
 											match_phrase = Some(hook.content.clone());
 										}

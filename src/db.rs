@@ -86,7 +86,7 @@ pub async fn log(
 	sqlx::query::<Sqlite>(&sql)
 		.bind(&privmsg.sender.id)
 		.bind(&privmsg.sender.name)
-		.bind(&privmsg.badges.iter().map(|badge| format!("{}_", badge.name)).collect::<String>())
+		.bind(&privmsg.badges.iter().map(|badge| badge.name.clone()).collect::<Vec<String>>().join(" "))
 		// here, the datetime was previously unformatted ... pain 
 		.bind(&privmsg.server_timestamp.format("%Y-%m-%d %H:%M:%S").to_string())
 		.bind(&privmsg.message_text)

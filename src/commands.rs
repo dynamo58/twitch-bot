@@ -59,7 +59,6 @@ pub async fn handle_command(
 		"setcmd"         => set_cmd(pool, &cmd).await,
 		"suggest"        => suggest(pool, &cmd).await,
 		"inspireme"      => get_inspire_image().await,
-		"sethook"        => set_hook(pool, &cmd, channel_specifics_arc).await,
 		"reddit"         => get_reddit_post(&cmd).await,
 		"wiki"           => query_wikipedia(&cmd).await,
 		"setalias"       => set_alias(pool, &cmd).await,
@@ -69,6 +68,7 @@ pub async fn handle_command(
 		"lurk"           => set_lurk_status(pool, &cmd).await,
 		"explain"        => explain(pool, &cmd.args[0]).await,
 		"urban"          => query_urban_dictionary(&cmd).await,
+		"pyramid"        => pyramid(&cmd, client.clone()).await,
 		"weather"        => get_weather_report(&cmd.args).await,
 		"chatstats"      => get_chatstats(pool, &cmd, auth).await,
 		"uptime"         => get_uptime(auth, &cmd, cache_arc).await,
@@ -79,6 +79,7 @@ pub async fn handle_command(
 		"rmrm"           => clear_reminders(pool, cmd.sender.id).await,
 		"ls"             => find_last_seen(pool, &cmd, auth, config).await,
 		"first"          => first_message(pool, auth, cache_arc, &cmd).await,
+		"sethook"        => set_hook(pool, &cmd, channel_specifics_arc).await,
 		"offlinetime"    => get_offline_time(pool, auth, &cmd, cache_arc).await,
 		"bible"          => get_rand_holy_book_verse(api::HolyBook::Bible).await,
 		"quran"          => get_rand_holy_book_verse(api::HolyBook::Quran).await,
@@ -1504,4 +1505,47 @@ pub async fn find_last_seen(
 async fn get_inspire_image()
 -> anyhow::Result<Option<String>> {
 	Ok(Some(format!("FeelsStrongMan {}", api::get_inspire_image().await?)))
+}
+
+async fn pyramid(
+	cmd:    &CommandSource,
+	client: TwitchClient,
+) -> anyhow::Result<Option<String>> {
+	let (emote, len) = match cmd.args.len() {
+		0 => return Ok(Some("❌ no emote provided".into())),
+		1 => (&cmd.args[0], 3),
+		_ => {
+			let emote = &cmd.args[0];
+
+			let num = match cmd.args[1].parse::<u8>() {
+				// clamp number to be 1 <= 15
+				Ok(num) => { if (num > 0 && num < 16) { num } else  { 16 } },
+				Err(_)  => 3
+			};
+
+			(emote, num)
+		}
+	};
+
+	let mut msg = String::from("");
+
+	for _ in 0..len {
+		msg.push_str(emote);
+		msg.push(' ');
+
+		client.say(cmd.channel.name.to_owned(), msg.clone()).await.unwrap();
+		// this is a very dirty workaround
+		// TODO: fix this when ChannelSpecifics has info
+		// about whether the bot is a mod or not
+		std::thread::sleep(std::time::Duration::from_secs(2));
+	}
+
+	let mut msg_end_idx = msg.len();
+	for _ in 0..len {
+		msg_end_idx -= emote.len() + 1;
+		client.say(cmd.channel.name.to_owned(), msg[..msg_end_idx].to_owned()).await.unwrap();
+		std::thread::sleep(std::time::Duration::from_secs(2));
+	}
+
+	Ok(None)
 }
