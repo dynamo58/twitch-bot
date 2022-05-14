@@ -18,8 +18,6 @@ use thiserror::Error;
 use twitch_irc::message::PrivmsgMessage;
 
 
-// some custom errors (ad hoc)
-// TODO: this should be reworked in the future
 #[derive(Error, Debug)]
 pub enum MyError {
 	#[error("index out of bounds")]
@@ -28,6 +26,14 @@ pub enum MyError {
 	NotFound,
 	#[error("Thread error")]
 	ThreadError,
+	#[error("❌ missing a parameter | add {0}=\"something\" into the command")]
+	MissingHardParameter(String),
+	#[error("❌ parameter `{0}` has bad type, expected a {1}")]
+	BadHardArgumentType(String, String),
+	#[error("❌ missing positional argument | position{0}, argument type: {1}")]
+	MissingPositionalArgument(u8, String),
+	#[error("❌ an internal error has occured, sorry PoroSad")]
+	InternalError,
 }
 
 // All the statuses one can have in Twitch chat
@@ -583,4 +589,28 @@ pub fn fmt_duration(dur: chrono::Duration, long_format: bool) -> String {
 	out.pop();
 	out.pop();
 	out
+}
+
+pub fn factorial(n: u128) -> u128 {
+	if n == 0 || n == 1 {
+		return 1;
+	}
+
+	n * factorial(n-1)
+}
+
+pub fn binomial_p_exact(n_of_tries: u128, n_of_successess: u128, p_of_success: f64) -> f64 {
+	(factorial(n_of_tries)/(factorial(n_of_tries - n_of_successess) * factorial(n_of_successess))) as f64 *
+    p_of_success.powf(n_of_successess as f64)                                                    *
+    (1. -p_of_success).powf((n_of_tries - n_of_successess) as f64)
+}
+
+pub fn binomial_p_exact_or_less(n_of_tries: u128, n_of_successess: u128, p_of_success: f64) -> f64 {
+	let mut total_p = 0.;
+	
+	for i in 0..=n_of_successess {
+		total_p += binomial_p_exact(n_of_tries, i, p_of_success);
+	}
+
+	total_p
 }

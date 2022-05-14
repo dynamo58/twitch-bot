@@ -21,6 +21,8 @@ use twitch_bot::{
 	fmt_duration,
 	convert_from_html_entities,
 	convert_to_html_encoding,
+	binomial_p_exact,
+	binomial_p_exact_or_less,
 };
 use background as bg;
 use commands::handle_command;

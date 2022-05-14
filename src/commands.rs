@@ -12,6 +12,8 @@ use crate::{
 	ChannelSpecificsCache,
 	fmt_duration,
 	convert_from_html_entities,
+	binomial_p_exact,
+	binomial_p_exact_or_less,
 };
 
 use std::sync::{Arc, Mutex};
@@ -74,6 +76,7 @@ pub async fn handle_command(
 		"uptime"         => get_uptime(auth, &cmd, cache_arc).await,
 		"accage"         => get_accage(auth, &cmd, cache_arc).await,
 		"delcmd"         => remove_channel_command(pool, &cmd).await,
+		"binomial"       => binomial_probability(&cmd),
 		"followage"      => get_followage(&cmd, auth, cache_arc).await,
 		"clearreminders" => clear_reminders(pool, cmd.sender.id).await,
 		"rmrm"           => clear_reminders(pool, cmd.sender.id).await,
@@ -103,8 +106,12 @@ pub async fn handle_command(
 	let cmd_out = match cmd_out {
 		Ok(content_or_not) => content_or_not,
 		Err(e)      => {
-			println!("{e}");
-			Some("error while processing, sorry PoroSad".into())
+			let fmted = format!("{e}");
+			if fmted.as_str() != "" {
+				Some(fmted)
+			} else {
+				Some("unknown error occured while processing, sorry PoroSad".into())
+			}
 		},
 	};
 
@@ -136,6 +143,34 @@ pub async fn handle_command(
 	}
 
 	None
+}
+
+
+/// get a specified argument from list of Strings
+/// # Examples:
+/// 
+/// ```
+/// # use twitch_bot::commands::parse_by_ident;
+/// let r = parse_by_ident(&["blabla".to_owned(), "number=\"150\"".to_owned(), "albalb".to_owned()], "number");
+/// assert_eq!(Some("150".to_owned()), r);
+///
+/// let r = parse_by_ident(&["blabla".to_owned(), "number=\"150\"".to_owned(), "albalb".to_owned()], "count");
+/// assert_eq!(None, r);
+/// ```
+pub fn parse_by_ident(vs: &[String], ident: &str) -> Option<String> {
+	let s = vs.join(" ");
+	
+	let start_idx = s.find(&format!("{ident}=\""));
+	let mut end_idx: Option<usize> = None;
+	if let Some(idx) = start_idx {
+		end_idx = (s[idx+ident.len()+3..]).find('\"');
+	}
+
+	if let (Some(start), Some(end)) = (start_idx, end_idx) {
+		Some(s[start+ident.len()+2..start+ident.len()+3+end].to_owned())
+	} else {
+		None
+	}
 }
 
 fn coinflip() -> anyhow::Result<Option<String>>{
@@ -721,22 +756,6 @@ async fn set_cmd(
 	db::set_cmd(pool, cmd.channel.id, cmd_name, cmd_type, &cmd_expr).await?;
 
 	Ok(Some("🔧 command created successfully".into()))
-}
-
-fn parse_by_ident(vs: &[String], ident: &str) -> Option<String> {
-	let s = vs.join(" ");
-	
-	let start_idx = s.find(&format!("{ident}=\""));
-	let mut end_idx: Option<usize> = None;
-	if let Some(idx) = start_idx {
-		end_idx = (s[idx+ident.len()+3..]).find('\"');
-	}
-
-	if let (Some(start), Some(end)) = (start_idx, end_idx) {
-		Some(s[start+ident.len()+2..start+ident.len()+3+end].to_owned())
-	} else {
-		None
-	}
 }
 
 pub async fn set_hook(
@@ -1548,4 +1567,32 @@ async fn pyramid(
 	}
 
 	Ok(None)
+}
+
+
+fn binomial_probability(
+	cmd: &CommandSource,
+) -> anyhow::Result<Option<String>> {
+	let tries      = parse_by_ident(&cmd.args, "tries"     )
+		.ok_or(MyError::MissingHardParameter("tries".to_owned()))?
+		.parse::<u128>()
+		.ok()
+		.ok_or(MyError::BadHardArgumentType("tries".to_owned(), "non-negative integer".into()))?;
+	let succ_count = parse_by_ident(&cmd.args, "succ_count")
+		.ok_or(MyError::MissingHardParameter("tries".to_owned()))?
+		.parse::<u128>()
+		.ok()
+		.ok_or(MyError::BadHardArgumentType("succ_count".to_owned(), "non-negative integer".into()))?;
+	let succ_prob  = parse_by_ident(&cmd.args, "succ_prob" )
+		.ok_or(MyError::MissingHardParameter("tries".to_owned()))?
+		.parse::<f64>()
+		.ok()
+		.ok_or(MyError::BadHardArgumentType("succ_prob".to_owned(), "decimal number from [0,1]".into()))?;
+
+	let prob_proc = match cmd.args.iter().map(|x| x.to_lowercase()).collect::<Vec<String>>().contains(&"exact".to_owned()) {
+		true =>   binomial_p_exact(tries, succ_count, succ_prob) * 100.,
+		false =>  binomial_p_exact_or_less(tries, succ_count, succ_prob) * 100.,
+	};
+
+	Ok(Some(format!("📈 {prob_proc:.3}% 📉")))
 }

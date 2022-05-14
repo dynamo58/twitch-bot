@@ -19,6 +19,7 @@ Lovcen (/lôːʋtɕen/) is a sophisticated [Twitch.tv](https://www.twitch.tv) ch
 | accage         | [name: opt(str)]                                                           | get the account age of spec. user or one's self                    | None
 | bench          | Command                                                                    | measure how long a command takes to execute                        | None
 | bible          | None                                                                       | get a random verse from the bible                                  | None
+| binomial       | tries="<number>" succ_prob="<number>" succ_count="<number>"                | get the probability of a binomial distribution                     | None
 | cf             | None                                                                       | classic coinflip                                                   | None
 | clearreminders | None                                                                       | clears all reminders the user has set (that are still pending)     | None
 | commands       | None                                                                       | returns a link to the command list (according to config file)      | None
@@ -52,6 +53,7 @@ Lovcen (/lôːʋtɕen/) is a sophisticated [Twitch.tv](https://www.twitch.tv) ch
 | rmalias        | [alias name: str]                                                          | remove an alias                                                    | None
 | rmrm           | None                                                                       | alias for the `clearreminders` command                             | None
 | setalias       | [name: str] [cmd expression]                                               | set an alias for caller (like a substitue for specificied command) | None
+| sethook        | [exact/substr] catch="<catchphrase>" content="<content>"                   | set a hook for incoming messages in the channel                    | Broadcaster/Moderator/VIP
 | suggest        | [suggestion: text]                                                         | suggest something to the bot maintainer                            | None
 | tanakh         | None                                                                       | get a random verse from the tanakh                                 | None
 | time           | [location: text]                                                           | get the local time in the specified location                       | None
@@ -61,8 +63,6 @@ Lovcen (/lôːʋtɕen/) is a sophisticated [Twitch.tv](https://www.twitch.tv) ch
 | weather        | [location: text]                                                           | get weather report from specified location                         | None
 | wiki           | [phrase: text]                                                             | tries to query Wikipedia for searched topic/title                  | None
 | wordratio      | [user: opt(str)] [word: str]                                               | get the ratio of messages of a user that contain certain word      | None
-| sethook        | [exact/substr] catch="<catchphrase>" content="<content>"                   | set a hook for incoming messages in the channel                    | Broadcaster/Moderator/VIP
-
 # Run yourself
 
 1. `git clone https://github.com/dynamo58/twitch-bot`
