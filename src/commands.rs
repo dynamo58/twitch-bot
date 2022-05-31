@@ -19,11 +19,14 @@ use crate::{
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
+use anyhow::bail;
 use async_recursion::async_recursion;
 use chrono::{offset::TimeZone, DateTime, Local, NaiveDateTime, Utc, Duration};
+use rand::prelude::SliceRandom;
 use rand::{self, Rng};
 use sqlx::sqlite::SqlitePool;
 use thiserror::Error as ThisError;
+
 
 type TwitchClient = twitch_irc::TwitchIRCClient<twitch_irc::transport::tcp::TCPTransport<twitch_irc::transport::tcp::TLS>, twitch_irc::login::StaticLoginCredentials>;
 
@@ -52,6 +55,7 @@ pub async fn handle_command(
 		"echo"           => echo(&cmd),
 		"8ball"          => decide(&cmd),
 		"decide"         => decide(&cmd),
+		"tf"             => tf(&cmd).await,
 		"query"          => query(&cmd).await,
 		"math"           => query(&cmd).await,
 		"ping"           => ping(config).await,
@@ -61,6 +65,7 @@ pub async fn handle_command(
 		"setcmd"         => set_cmd(pool, &cmd).await,
 		"suggest"        => suggest(pool, &cmd).await,
 		"inspireme"      => get_inspire_image().await,
+		"binomial"       => binomial_probability(&cmd),
 		"reddit"         => get_reddit_post(&cmd).await,
 		"wiki"           => query_wikipedia(&cmd).await,
 		"setalias"       => set_alias(pool, &cmd).await,
@@ -76,7 +81,6 @@ pub async fn handle_command(
 		"uptime"         => get_uptime(auth, &cmd, cache_arc).await,
 		"accage"         => get_accage(auth, &cmd, cache_arc).await,
 		"delcmd"         => remove_channel_command(pool, &cmd).await,
-		"binomial"       => binomial_probability(&cmd),
 		"followage"      => get_followage(&cmd, auth, cache_arc).await,
 		"clearreminders" => clear_reminders(pool, cmd.sender.id).await,
 		"rmrm"           => clear_reminders(pool, cmd.sender.id).await,
@@ -1595,4 +1599,35 @@ fn binomial_probability(
 	};
 
 	Ok(Some(format!("📈 {prob_proc:.3}% 📉")))
+}
+
+async fn tf(
+	cmd: &CommandSource,
+) -> anyhow::Result<Option<String>> {
+	if !cmd.sender.is_mvb() {
+		bail!(MyError::InsufficientPrivileges);
+	}
+
+	let amount = match cmd.args.len() {
+		0 => 5,
+		_ => {
+			let n = cmd.args[0].parse::<u8>()
+				.ok()
+				.ok_or(MyError::MissingPositionalArgument(1, "positive integer [1,10".into()))?;
+			
+			n.clamp(1, 10)
+		}
+	};
+
+	let mut c = api::get_chatters(&cmd.channel.name)
+		.await?
+		.ok_or(MyError::Unknown)?;
+
+	c.shuffle(&mut rand::thread_rng());
+
+	let select_count = if ((amount as usize) < c.len()) { amount as usize } else { c.len() };
+
+	let mut out = c[0..select_count].join(" ");
+	out.push_str(" :tf:");
+	Ok(Some(out))
 }

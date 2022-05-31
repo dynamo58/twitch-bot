@@ -26,14 +26,18 @@ pub enum MyError {
 	NotFound,
 	#[error("Thread error")]
 	ThreadError,
+	#[error("Insufficient privileges | requires to be mod/vip/broadcaster")]
+	InsufficientPrivileges,
 	#[error("❌ missing a parameter | add {0}=\"something\" into the command")]
 	MissingHardParameter(String),
 	#[error("❌ parameter `{0}` has bad type, expected a {1}")]
 	BadHardArgumentType(String, String),
-	#[error("❌ missing positional argument | position{0}, argument type: {1}")]
+	#[error("❌ missing positional argument | position {0}, argument type: {1}")]
 	MissingPositionalArgument(u8, String),
 	#[error("❌ an internal error has occured, sorry PoroSad")]
-	InternalError,
+	Internal,
+	#[error("❌ an unknown error has occured, sorry PoroSad")]
+	Unknown,
 }
 
 // All the statuses one can have in Twitch chat
